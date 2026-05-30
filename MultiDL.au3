@@ -43,6 +43,7 @@ Global $bShowCMD = False
 Global $hDLProc = 0
 ; ---- Zuletzt heruntergeladene Datei (fuer Play-Button) ----
 Global $sLastFile = ""
+Global $bPlayerOpened = False
 
 ; ---- Startup Check ----
 _StartupCheck()
@@ -379,6 +380,7 @@ While 1
 				GUICtrlSetData($hLiveProgSize, "")
 				GUICtrlSetData($hLiveBtnStart, "Start Live")
 				GUICtrlSetBkColor($hLiveBtnStart, 0x880000)
+				$bPlayerOpened = False
 			Else
 				Local $sRaw = GUICtrlRead($hLiveInput)
 				$sRaw = StringStripWS($sRaw, 3)
@@ -616,6 +618,7 @@ EndFunc   ;==>_CleanURL
 ;  Live-View: yt-dlp starten, Datei oeffnen
 ; ============================================================
 Func _StartLive($sURL, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
+	If $hDLProc <> 0 Then Return  ; Sicherheitsnetz: nie doppelt starten
 	$sURL = StringStripWS($sURL, 3)
 	If Not StringRegExp($sURL, "(?i)^https?://") Then
 		GUICtrlSetData($hLiveProgLabel, "Bad URL.")
@@ -626,40 +629,30 @@ Func _StartLive($sURL, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 	If $iAmp > 0 Then $sURL = StringLeft($sURL, $iAmp - 1)
 
 	GUICtrlSetPos($hLiveProgBar, 24, 290, 0, 10)
-	GUICtrlSetData($hLiveProgLabel, "Starting...")
+	GUICtrlSetData($hLiveProgLabel, "Waiting for file...")
 	GUICtrlSetData($hLiveProgSize, "")
 	GUICtrlSetData($hLiveBtnStart, "Stop")
 	GUICtrlSetBkColor($hLiveBtnStart, 0x444444)
 
-	Local $sOutFile = $DL_DIR & "\_watch_live.mp4"
-	Local $sCMD = '"' & $YTDLP_EXE & '" --no-playlist --no-part -f "best[ext=mp4]/best" --newline -o "' & $sOutFile & '" "' & $sURL & '"'
-
+	Local $sCMD = '"' & $YTDLP_EXE & '" --no-playlist --no-part -f "best[ext=mp4]/best" --newline -o "' & $DL_DIR & '\_watch_live.mp4" "' & $sURL & '"'
+	FileDelete($DL_DIR & "\_watch_live.mp4")
 	If $bShowCMD Then Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
 	$hDLProc = Run($sCMD, $DL_DIR, @SW_HIDE, 2)
-
-	; Warten bis Datei existiert, dann Player
-	GUICtrlSetData($hLiveProgLabel, "Waiting for file...")
-	Local $iWait = 0
-	Do
-		Sleep(300)
-		$iWait += 1
-		GUIGetMsg()
-	Until (FileExists($sOutFile) And FileGetSize($sOutFile) > 0) Or $iWait > 50
-	If FileExists($sOutFile) And FileGetSize($sOutFile) > 0 Then
-		ShellExecute($sOutFile)
-		GUICtrlSetData($hLiveProgLabel, "Watching _watch_live.mp4 ...")
-	Else
-		GUICtrlSetData($hLiveProgLabel, "File not ready yet, download running...")
-	EndIf
+	; Player wird in _ReadLiveProgress geoeffnet sobald Datei existiert
 EndFunc   ;==>_StartLive
 
 ; ============================================================
 ;  Live-Fortschritt lesen
 ; ============================================================
 Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
+	Static Local $iPulse = 0, $iPulseDir = 1
+
 	Local $sLine = StdoutRead($hDLProc)
 	If @error Then
 		$hDLProc = 0
+		$bPlayerOpened = False
+		$iPulse = 0
+		$iPulseDir = 1
 		GUICtrlSetPos($hLiveProgBar, 24, 290, 512, 10)
 		GUICtrlSetData($hLiveProgLabel, "Done.")
 		GUICtrlSetData($hLiveProgSize, "")
@@ -667,6 +660,16 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 		GUICtrlSetBkColor($hLiveBtnStart, 0x880000)
 		Return
 	EndIf
+
+	; Player einmalig oeffnen sobald Datei da ist
+	If Not $bPlayerOpened Then
+		Local $sOutFile = $DL_DIR & "\_watch_live.mp4"
+		If FileExists($sOutFile) And FileGetSize($sOutFile) > 0 Then
+			ShellExecute($sOutFile)
+			$bPlayerOpened = True
+		EndIf
+	EndIf
+
 	If $sLine = "" Then Return
 
 	Local $aLines = StringSplit($sLine, @LF, 1)
@@ -681,8 +684,6 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 			Local $sShort = StringRegExpReplace($sTrimmed, "^\[download\]\s+", "")
 			If StringLen($sShort) > 65 Then $sShort = StringLeft($sShort, 65) & "..."
 			GUICtrlSetData($hLiveProgLabel, $sShort)
-			; Pulsierender Balken
-			Static Local $iPulse = 0, $iPulseDir = 1
 			$iPulse += $iPulseDir * 24
 			If $iPulse >= 480 Then $iPulseDir = -1
 			If $iPulse <= 0 Then $iPulseDir = 1
@@ -693,6 +694,7 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 		If StringInStr($sTrimmed, "ERROR") Then
 			GUICtrlSetData($hLiveProgLabel, StringLeft($sTrimmed, 65))
 			$hDLProc = 0
+			$bPlayerOpened = False
 			GUICtrlSetData($hLiveBtnStart, "Start Live")
 			GUICtrlSetBkColor($hLiveBtnStart, 0x880000)
 		EndIf
