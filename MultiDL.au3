@@ -975,7 +975,7 @@ EndFunc   ;==>_StartupCheck
 ; ============================================================
 ;  Datei nativ per InetGet herunterladen (Wine-kompatibel)
 ; ============================================================
-Func _Download($sURL, $sDest, $hProgBar = 0, $iProgStart = 0, $iProgEnd = 100)
+Func _Download($sURL, $sDest, $hProgBar = 0, $iProgStart = 0, $iProgEnd = 100, $iBarX = 16, $iBarY = 68, $iBarW = 388, $iBarH = 8)
 	Local $hInet = InetGet($sURL, $sDest, $INET_FORCERELOAD, 1)
 	Do
 		If $hProgBar <> 0 Then
@@ -984,8 +984,8 @@ Func _Download($sURL, $sDest, $hProgBar = 0, $iProgStart = 0, $iProgEnd = 100)
 			If $iTotal > 0 Then
 				Local $fPct = $iReceived / $iTotal
 				Local $iRange = $iProgEnd - $iProgStart
-				Local $iWidth = Int(388 * ($iProgStart / 100 + $fPct * $iRange / 100))
-				GUICtrlSetPos($hProgBar, 16, 68, $iWidth, 8)
+				Local $iWidth = Int($iBarW * ($iProgStart / 100 + $fPct * $iRange / 100))
+				GUICtrlSetPos($hProgBar, $iBarX, $iBarY, $iWidth, $iBarH)
 			EndIf
 		EndIf
 		GUIGetMsg()
@@ -1124,7 +1124,7 @@ Func _UpdateTools($hStatus, $hProgBar, $hProgLabel, $hProgPct)
 	GUICtrlSetData($hProgLabel, "Updating yt-dlp.exe...")
 	Local $sURL1 = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
 	Local $sTmp1 = $YTDLP_EXE & ".tmp"
-	If _Download($sURL1, $sTmp1, $hProgBar, 0, 45) Then
+	If _Download($sURL1, $sTmp1, $hProgBar, 0, 45, 24, 364, 512, 12) Then
 		FileDelete($YTDLP_EXE)
 		FileMove($sTmp1, $YTDLP_EXE)
 		GUICtrlSetData($hProgLabel, "yt-dlp.exe updated!")
@@ -1137,7 +1137,7 @@ Func _UpdateTools($hStatus, $hProgBar, $hProgLabel, $hProgPct)
 	GUICtrlSetData($hProgLabel, "Downloading ffmpeg... (~90 MB)")
 	Local $sURL2 = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 	Local $sZip = $BIN_DIR & "\ffmpeg_update.zip"
-	If _Download($sURL2, $sZip, $hProgBar, 45, 85) Then
+	If _Download($sURL2, $sZip, $hProgBar, 45, 85, 24, 364, 512, 12) Then
 		GUICtrlSetData($hProgLabel, "Unpacking ffmpeg.exe...")
 		GUICtrlSetPos($hProgBar, 24, 364, Int(512 * 0.85), 12)
 		FileDelete($BIN_DIR & "\ffmpeg.exe")
