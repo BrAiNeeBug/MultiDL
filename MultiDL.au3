@@ -21,7 +21,7 @@
 #include <InetConstants.au3>
 
 ; ---- Konstanten ----
-Global Const $APP_TITLE = "BrAiNee's MultiDL v5"
+Global Const $APP_TITLE = "BrAiNee's MultiDL v6"
 Global Const $BIN_DIR = @ScriptDir & "\bin"
 Global Const $DL_DIR = @ScriptDir & "\MultiDL-Downloads"
 Global Const $YTDLP_EXE = $BIN_DIR & "\yt-dlp.exe"
@@ -48,7 +48,6 @@ Global $sLastFile = ""
 _StartupCheck()
 
 ; ---- GUI aufbauen ----
-; Höhe: 420 + 60 (Fortschritt-Bereich) = 480
 Local $hGUI = GUICreate($APP_TITLE, 560, 524, -1, -1, $WS_POPUP + $WS_BORDER)
 GUISetBkColor($CLR_BG, $hGUI)
 
@@ -65,6 +64,12 @@ Local $hTitleText = GUICtrlCreateLabel($APP_TITLE, 38, 9, 200, 20)
 GUICtrlSetFont($hTitleText, 10, 700, 0, "Segoe UI")
 GUICtrlSetColor($hTitleText, $CLR_TEXT)
 GUICtrlSetBkColor($hTitleText, $CLR_PANEL)
+
+; Live-Button in Titelleiste
+Local $hBtnLive = GUICtrlCreateLabel(" LIVE ", 450, 8, 48, 20)
+GUICtrlSetFont($hBtnLive, 8, 700, 0, "Segoe UI")
+GUICtrlSetColor($hBtnLive, $CLR_TEXT)
+GUICtrlSetBkColor($hBtnLive, 0x660000)
 
 Local $hClose = GUICtrlCreateLabel("x", 527, 8, 24, 22)
 GUICtrlSetFont($hClose, 10, 700, 0, "Segoe UI")
@@ -107,19 +112,16 @@ GUICtrlSetFont($hLabelFormat, 9, 600, 0, "Segoe UI")
 GUICtrlSetColor($hLabelFormat, $CLR_MUTED)
 GUICtrlSetBkColor($hLabelFormat, $CLR_BG)
 
-; Video (links, startet aktiv = rot)
 Local $hToggleVideo = GUICtrlCreateLabel("  Video(MP4)  ", 88, 207, 80, 26)
 GUICtrlSetFont($hToggleVideo, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleVideo, $CLR_TEXT)
 GUICtrlSetBkColor($hToggleVideo, $CLR_ACCENT)
 
-; MP3 (rechts, inaktiv)
 Local $hToggleMP3 = GUICtrlCreateLabel("  Audio(MP3)  ", 168, 207, 80, 26)
 GUICtrlSetFont($hToggleMP3, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleMP3, $CLR_MUTED)
 GUICtrlSetBkColor($hToggleMP3, 0x222222)
 
-; Info rechts vom Toggle
 Local $hModeInfo = GUICtrlCreateLabel("(best video quality)", 258, 212, 280, 18)
 GUICtrlSetFont($hModeInfo, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hModeInfo, $CLR_MUTED)
@@ -131,32 +133,27 @@ GUICtrlSetFont($hLabelPlaylist, 9, 600, 0, "Segoe UI")
 GUICtrlSetColor($hLabelPlaylist, $CLR_MUTED)
 GUICtrlSetBkColor($hLabelPlaylist, $CLR_BG)
 
-; Einzeln (links, startet aktiv = rot)
 Local $hToggleSingle = GUICtrlCreateLabel("  Single  ", 88, 239, 90, 26)
 GUICtrlSetFont($hToggleSingle, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleSingle, $CLR_TEXT)
 GUICtrlSetBkColor($hToggleSingle, $CLR_ACCENT)
 
-; Playlist (rechts, inaktiv)
 Local $hTogglePlaylist = GUICtrlCreateLabel("  Playlist  ", 178, 239, 90, 26)
 GUICtrlSetFont($hTogglePlaylist, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hTogglePlaylist, $CLR_MUTED)
 GUICtrlSetBkColor($hTogglePlaylist, 0x222222)
 
-; Info rechts
 Local $hPlaylistInfo = GUICtrlCreateLabel("(download single file)", 278, 244, 260, 18)
 GUICtrlSetFont($hPlaylistInfo, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hPlaylistInfo, $CLR_MUTED)
 GUICtrlSetBkColor($hPlaylistInfo, $CLR_BG)
 
 ; ---- Buttons ----
-; Layout: Start(224) | CMD(84) | Paste(110) | Update(74)  X=24..536
 Local $hBtnDownload = GUICtrlCreateButton("Start", 24, 282, 224, 38)
 GUICtrlSetFont($hBtnDownload, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnDownload, $CLR_TEXT)
 GUICtrlSetBkColor($hBtnDownload, 0x00AA44)
 
-; CMD-Fenster Toggle Button
 Local $hBtnCMD = GUICtrlCreateButton("CMD: OFF", 256, 282, 84, 38)
 GUICtrlSetFont($hBtnCMD, 8, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnCMD, $CLR_MUTED)
@@ -172,27 +169,23 @@ GUICtrlSetFont($hBtnUpdate, 8, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnUpdate, $CLR_MUTED)
 GUICtrlSetBkColor($hBtnUpdate, 0x1A1A2A)
 
-; ---- Fortschritts-Bereich (neu, ab Y=338) ----
+; ---- Fortschritts-Bereich ----
 Local $hLine3 = GUICtrlCreateLabel("", 24, 334, 512, 1)
 GUICtrlSetBkColor($hLine3, 0x2A2A2A)
 
-; Fortschritts-Label (Dateiname / Fortschritts-Text)
 Local $hProgLabel = GUICtrlCreateLabel("Ready.", 24, 342, 460, 16)
 GUICtrlSetFont($hProgLabel, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hProgLabel, $CLR_MUTED)
 GUICtrlSetBkColor($hProgLabel, $CLR_BG)
 
-; Prozent-Anzeige rechts
 Local $hProgPct = GUICtrlCreateLabel("", 490, 342, 46, 16)
 GUICtrlSetFont($hProgPct, 8, 700, 0, "Segoe UI")
 GUICtrlSetColor($hProgPct, $CLR_ACCENT)
 GUICtrlSetBkColor($hProgPct, $CLR_BG)
 
-; Fortschrittsbalken Hintergrund
 Local $hProgBG = GUICtrlCreateLabel("", 24, 364, 512, 12)
 GUICtrlSetBkColor($hProgBG, 0x222222)
 
-; Fortschrittsbalken (aktiv, Breite = 0 bis 512)
 Local $hProgBar = GUICtrlCreateLabel("", 24, 364, 0, 12)
 GUICtrlSetBkColor($hProgBar, $CLR_ACCENT)
 
@@ -203,27 +196,101 @@ GUICtrlSetColor($hStatus, $CLR_MUTED)
 GUICtrlSetBkColor($hStatus, $CLR_PANEL)
 GUICtrlSetStyle($hStatus, $SS_CENTER)
 
-; ---- Play-Bereich (nur Einzelmodus) ----
+; ---- Play-Bereich ----
 Local $hLine4 = GUICtrlCreateLabel("", 24, 386, 512, 1)
 GUICtrlSetBkColor($hLine4, 0x2A2A2A)
 
-; Play-Button: startet die zuletzt geladene Datei
 Local $hBtnPlay = GUICtrlCreateLabel("> Play last File", 24, 398, 242, 36)
 GUICtrlSetFont($hBtnPlay, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnPlay, $CLR_TEXT)
 GUICtrlSetBkColor($hBtnPlay, 0x1A3A1A)
 
-; Ordner-Button: oeffnet Download-Ordner
 Local $hBtnFolder = GUICtrlCreateLabel("[>] View Downloads", 278, 398, 258, 36)
 GUICtrlSetFont($hBtnFolder, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnFolder, $CLR_MUTED)
 GUICtrlSetBkColor($hBtnFolder, 0x1A1A2A)
 
-; Dateiname-Anzeige unter den Buttons
 Local $hPlayLabel = GUICtrlCreateLabel("No download completed yet.", 24, 440, 512, 16)
 GUICtrlSetFont($hPlayLabel, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hPlayLabel, $CLR_MUTED)
 GUICtrlSetBkColor($hPlayLabel, $CLR_BG)
+
+; ============================================================
+; ---- LIVE VIEW Controls (anfangs versteckt) ----
+; ============================================================
+
+; Roter Balken oben mit LIVE-Schriftzug
+Local $hLiveBanner = GUICtrlCreateLabel("", 0, 38, 560, 40)
+GUICtrlSetBkColor($hLiveBanner, 0x880000)
+GUICtrlSetState($hLiveBanner, $GUI_HIDE)
+
+Local $hLiveTitle = GUICtrlCreateLabel(">> LIVE VIEW", 20, 47, 300, 22)
+GUICtrlSetFont($hLiveTitle, 11, 800, 0, "Segoe UI")
+GUICtrlSetColor($hLiveTitle, $CLR_TEXT)
+GUICtrlSetBkColor($hLiveTitle, 0x880000)
+GUICtrlSetState($hLiveTitle, $GUI_HIDE)
+
+
+; URL Input
+Local $hLiveLabelURL = GUICtrlCreateLabel("URL:", 24, 94, 60, 18)
+GUICtrlSetFont($hLiveLabelURL, 9, 600, 0, "Segoe UI")
+GUICtrlSetColor($hLiveLabelURL, $CLR_MUTED)
+GUICtrlSetBkColor($hLiveLabelURL, $CLR_BG)
+GUICtrlSetState($hLiveLabelURL, $GUI_HIDE)
+
+Local $hLiveInput = GUICtrlCreateEdit("", 24, 114, 512, 48, $ES_MULTILINE + $ES_AUTOVSCROLL + $WS_VSCROLL)
+GUICtrlSetFont($hLiveInput, 9, 400, 0, "Consolas")
+GUICtrlSetColor($hLiveInput, $CLR_TEXT)
+GUICtrlSetBkColor($hLiveInput, $CLR_INPUT)
+GUICtrlSetState($hLiveInput, $GUI_HIDE)
+
+; Info-Text
+Local $hLiveInfo = GUICtrlCreateLabel("Opens _watch_live.mp4 in your player while downloading.  File stays in downloads folder.", 24, 172, 512, 16)
+GUICtrlSetFont($hLiveInfo, 8, 400, 0, "Segoe UI")
+GUICtrlSetColor($hLiveInfo, $CLR_MUTED)
+GUICtrlSetBkColor($hLiveInfo, $CLR_BG)
+GUICtrlSetState($hLiveInfo, $GUI_HIDE)
+
+; Start/Stop Button
+Local $hLiveBtnStart = GUICtrlCreateButton("Start Live", 24, 200, 250, 44)
+GUICtrlSetFont($hLiveBtnStart, 10, 700, 0, "Segoe UI")
+GUICtrlSetColor($hLiveBtnStart, $CLR_TEXT)
+GUICtrlSetBkColor($hLiveBtnStart, 0x880000)
+GUICtrlSetState($hLiveBtnStart, $GUI_HIDE)
+
+; Paste+Start Button
+Local $hLiveBtnPaste = GUICtrlCreateButton("PasteStart", 286, 200, 250, 44)
+GUICtrlSetFont($hLiveBtnPaste, 10, 700, 0, "Segoe UI")
+GUICtrlSetColor($hLiveBtnPaste, $CLR_TEXT)
+GUICtrlSetBkColor($hLiveBtnPaste, 0x1E2A1E)
+GUICtrlSetState($hLiveBtnPaste, $GUI_HIDE)
+
+; Trennlinie
+Local $hLiveLine = GUICtrlCreateLabel("", 24, 258, 512, 1)
+GUICtrlSetBkColor($hLiveLine, 0x2A2A2A)
+GUICtrlSetState($hLiveLine, $GUI_HIDE)
+
+; Fortschritts-Label
+Local $hLiveProgLabel = GUICtrlCreateLabel("Ready.", 24, 268, 460, 16)
+GUICtrlSetFont($hLiveProgLabel, 8, 400, 0, "Segoe UI")
+GUICtrlSetColor($hLiveProgLabel, $CLR_MUTED)
+GUICtrlSetBkColor($hLiveProgLabel, $CLR_BG)
+GUICtrlSetState($hLiveProgLabel, $GUI_HIDE)
+
+Local $hLiveProgSize = GUICtrlCreateLabel("", 490, 268, 46, 16)
+GUICtrlSetFont($hLiveProgSize, 8, 700, 0, "Segoe UI")
+GUICtrlSetColor($hLiveProgSize, 0x0088FF)
+GUICtrlSetBkColor($hLiveProgSize, $CLR_BG)
+GUICtrlSetState($hLiveProgSize, $GUI_HIDE)
+
+; Fortschrittsbalken (pulsierend)
+Local $hLiveProgBG = GUICtrlCreateLabel("", 24, 290, 512, 10)
+GUICtrlSetBkColor($hLiveProgBG, 0x222222)
+GUICtrlSetState($hLiveProgBG, $GUI_HIDE)
+
+Local $hLiveProgBar = GUICtrlCreateLabel("", 24, 290, 0, 10)
+GUICtrlSetBkColor($hLiveProgBar, 0x0088FF)
+GUICtrlSetState($hLiveProgBar, $GUI_HIDE)
 
 ; ---- Fenster anzeigen ----
 GUISetState(@SW_SHOW, $hGUI)
@@ -232,30 +299,50 @@ GUISetState(@SW_SHOW, $hGUI)
 Local $bDragging = False
 Local $iDragX, $iDragY
 Local $iPosX, $iPosY
+Local $bLiveView = False
+; Pulse fuer Live-Balken
+Local $iPulse = 0, $iPulseDir = 1
 
 While 1
 	Local $aMsg = GUIGetMsg(1)
 	Local $iMsg = $aMsg[0]
 
-	; ---- Fortschritt lesen wenn Download läuft ----
+	; ---- Fortschritt lesen wenn Download laeuft ----
 	If $hDLProc <> 0 Then
-		_ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
+		If $bLiveView Then
+			_ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
+		Else
+			_ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
+		EndIf
 	EndIf
 
 	Select
 		Case $iMsg = $GUI_EVENT_CLOSE
 			ExitLoop
 
-			; Titelbar: X erkennen + Drag
 		Case $iMsg = $GUI_EVENT_PRIMARYDOWN
 			Local $aCursorPos = MouseGetPos()
 			Local $aWinPos = WinGetPos($hGUI)
 			Local $iRelX = $aCursorPos[0] - $aWinPos[0]
 			Local $iRelY = $aCursorPos[1] - $aWinPos[1]
+			; X-Button
 			If $iRelX >= 518 And $iRelX <= 555 And $iRelY >= 0 And $iRelY <= 36 Then
 				ExitLoop
 			EndIf
-			If $iRelY < 36 Then
+			; LIVE-Button (X=444..502, Y=0..36)
+			If $iRelX >= 444 And $iRelX <= 502 And $iRelY >= 0 And $iRelY <= 36 And $hDLProc = 0 Then
+				If Not $bLiveView Then
+					$bLiveView = True
+					GUICtrlSetBkColor($hBtnLive, $CLR_ACCENT)
+					_ShowNormalControls($GUI_HIDE, $hLabelURL, $hInput, $hLabelClean, $hCleanDisplay, $hLine2, $hLabelFormat, $hToggleVideo, $hToggleMP3, $hModeInfo, $hLabelPlaylist, $hToggleSingle, $hTogglePlaylist, $hPlaylistInfo, $hBtnDownload, $hBtnCMD, $hBtnPaste, $hBtnUpdate, $hLine3, $hProgLabel, $hProgPct, $hProgBG, $hProgBar, $hLine4, $hBtnPlay, $hBtnFolder, $hPlayLabel, $hStatus)
+					_ShowLiveControls($GUI_SHOW, $hLiveBanner, $hLiveTitle, $hLiveLabelURL, $hLiveInput, $hLiveInfo, $hLiveBtnStart, $hLiveBtnPaste, $hLiveLine, $hLiveProgLabel, $hLiveProgSize, $hLiveProgBG, $hLiveProgBar)
+				Else
+					$bLiveView = False
+					GUICtrlSetBkColor($hBtnLive, 0x660000)
+					_ShowLiveControls($GUI_HIDE, $hLiveBanner, $hLiveTitle, $hLiveLabelURL, $hLiveInput, $hLiveInfo, $hLiveBtnStart, $hLiveBtnPaste, $hLiveLine, $hLiveProgLabel, $hLiveProgSize, $hLiveProgBG, $hLiveProgBar)
+					_ShowNormalControls($GUI_SHOW, $hLabelURL, $hInput, $hLabelClean, $hCleanDisplay, $hLine2, $hLabelFormat, $hToggleVideo, $hToggleMP3, $hModeInfo, $hLabelPlaylist, $hToggleSingle, $hTogglePlaylist, $hPlaylistInfo, $hBtnDownload, $hBtnCMD, $hBtnPaste, $hBtnUpdate, $hLine3, $hProgLabel, $hProgPct, $hProgBG, $hProgBar, $hLine4, $hBtnPlay, $hBtnFolder, $hPlayLabel, $hStatus)
+				EndIf
+			ElseIf $iRelY < 36 Then
 				$bDragging = True
 				$iDragX = $aCursorPos[0]
 				$iDragY = $aCursorPos[1]
@@ -270,6 +357,50 @@ While 1
 			If $bDragging Then
 				Local $aCur = MouseGetPos()
 				WinMove($hGUI, "", $iPosX + ($aCur[0] - $iDragX), $iPosY + ($aCur[1] - $iDragY))
+			EndIf
+
+
+			; ---- Live Start/Stop ----
+		Case $iMsg = $hLiveBtnStart
+			If $hDLProc <> 0 Then
+				ProcessClose($hDLProc)
+				$hDLProc = 0
+				Local $oProcs = ProcessList()
+				For $p = 1 To $oProcs[0][0]
+					Select
+						Case StringInStr($oProcs[$p][0], "yt-dlp")
+							ProcessClose($oProcs[$p][1])
+						Case StringInStr($oProcs[$p][0], "ffmpeg")
+							ProcessClose($oProcs[$p][1])
+					EndSelect
+				Next
+				GUICtrlSetPos($hLiveProgBar, 24, 290, 0, 10)
+				GUICtrlSetData($hLiveProgLabel, "Stopped.")
+				GUICtrlSetData($hLiveProgSize, "")
+				GUICtrlSetData($hLiveBtnStart, "Start Live")
+				GUICtrlSetBkColor($hLiveBtnStart, 0x880000)
+			Else
+				Local $sRaw = GUICtrlRead($hLiveInput)
+				$sRaw = StringStripWS($sRaw, 3)
+				If $sRaw = "" Then
+					GUICtrlSetData($hLiveProgLabel, "No URL entered.")
+				Else
+					_StartLive($sRaw, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
+				EndIf
+			EndIf
+
+			; ---- Live PasteStart ----
+		Case $iMsg = $hLiveBtnPaste
+			If $hDLProc <> 0 Then
+				GUICtrlSetData($hLiveProgLabel, "Stop first!")
+			Else
+				Local $sClip = ClipGet()
+				If $sClip = "" Then
+					GUICtrlSetData($hLiveProgLabel, "Clipboard empty.")
+				Else
+					GUICtrlSetData($hLiveInput, $sClip)
+					_StartLive($sClip, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
+				EndIf
 			EndIf
 
 			; Toggle: Video
@@ -306,7 +437,6 @@ While 1
 				GUICtrlSetColor($hTogglePlaylist, $CLR_MUTED)
 				GUICtrlSetData($hPlaylistInfo, "(download single file)")
 				_SetStatus($hStatus, "Modus: Single File", $CLR_MUTED)
-				; Play-Bereich einblenden
 				GUICtrlSetState($hBtnPlay, $GUI_SHOW)
 				GUICtrlSetState($hBtnFolder, $GUI_SHOW)
 				GUICtrlSetState($hPlayLabel, $GUI_SHOW)
@@ -323,7 +453,6 @@ While 1
 				GUICtrlSetColor($hToggleSingle, $CLR_MUTED)
 				GUICtrlSetData($hPlaylistInfo, "(download all files)")
 				_SetStatus($hStatus, "Modus: Playlist", $CLR_MUTED)
-				; Play-Bereich ausblenden
 				GUICtrlSetState($hBtnPlay, $GUI_HIDE)
 				GUICtrlSetState($hBtnFolder, $GUI_HIDE)
 				GUICtrlSetState($hPlayLabel, $GUI_HIDE)
@@ -346,7 +475,6 @@ While 1
 			; Download / Stop Toggle
 		Case $iMsg = $hBtnDownload
 			If $hDLProc <> 0 Then
-				; Läuft -> als Stop-Button fungieren
 				ProcessClose($hDLProc)
 				$hDLProc = 0
 				Local $oProcs = ProcessList()
@@ -407,7 +535,7 @@ While 1
 		Case $iMsg = $hBtnFolder
 			ShellExecute($DL_DIR)
 
-			; Update: yt-dlp + ffmpeg neu laden
+			; Update
 		Case $iMsg = $hBtnUpdate
 			If $hDLProc <> 0 Then
 				_SetStatus($hStatus, "Stop download first!", 0xFFAA00)
@@ -422,6 +550,57 @@ GUIDelete($hGUI)
 Exit
 
 ; ============================================================
+;  Show/Hide Normal Controls
+; ============================================================
+Func _ShowNormalControls($iState, $hLabelURL, $hInput, $hLabelClean, $hCleanDisplay, $hLine2, $hLabelFormat, $hToggleVideo, $hToggleMP3, $hModeInfo, $hLabelPlaylist, $hToggleSingle, $hTogglePlaylist, $hPlaylistInfo, $hBtnDownload, $hBtnCMD, $hBtnPaste, $hBtnUpdate, $hLine3, $hProgLabel, $hProgPct, $hProgBG, $hProgBar, $hLine4, $hBtnPlay, $hBtnFolder, $hPlayLabel, $hStatus)
+	GUICtrlSetState($hLabelURL, $iState)
+	GUICtrlSetState($hInput, $iState)
+	GUICtrlSetState($hLabelClean, $iState)
+	GUICtrlSetState($hCleanDisplay, $iState)
+	GUICtrlSetState($hLine2, $iState)
+	GUICtrlSetState($hLabelFormat, $iState)
+	GUICtrlSetState($hToggleVideo, $iState)
+	GUICtrlSetState($hToggleMP3, $iState)
+	GUICtrlSetState($hModeInfo, $iState)
+	GUICtrlSetState($hLabelPlaylist, $iState)
+	GUICtrlSetState($hToggleSingle, $iState)
+	GUICtrlSetState($hTogglePlaylist, $iState)
+	GUICtrlSetState($hPlaylistInfo, $iState)
+	GUICtrlSetState($hBtnDownload, $iState)
+	GUICtrlSetState($hBtnCMD, $iState)
+	GUICtrlSetState($hBtnPaste, $iState)
+	GUICtrlSetState($hBtnUpdate, $iState)
+	GUICtrlSetState($hLine3, $iState)
+	GUICtrlSetState($hProgLabel, $iState)
+	GUICtrlSetState($hProgPct, $iState)
+	GUICtrlSetState($hProgBG, $iState)
+	GUICtrlSetState($hProgBar, $iState)
+	GUICtrlSetState($hLine4, $iState)
+	GUICtrlSetState($hBtnPlay, $iState)
+	GUICtrlSetState($hBtnFolder, $iState)
+	GUICtrlSetState($hPlayLabel, $iState)
+	GUICtrlSetState($hStatus, $iState)
+EndFunc   ;==>_ShowNormalControls
+
+; ============================================================
+;  Show/Hide Live Controls
+; ============================================================
+Func _ShowLiveControls($iState, $hLiveBanner, $hLiveTitle, $hLiveLabelURL, $hLiveInput, $hLiveInfo, $hLiveBtnStart, $hLiveBtnPaste, $hLiveLine, $hLiveProgLabel, $hLiveProgSize, $hLiveProgBG, $hLiveProgBar)
+	GUICtrlSetState($hLiveBanner, $iState)
+	GUICtrlSetState($hLiveTitle, $iState)
+	GUICtrlSetState($hLiveLabelURL, $iState)
+	GUICtrlSetState($hLiveInput, $iState)
+	GUICtrlSetState($hLiveInfo, $iState)
+	GUICtrlSetState($hLiveBtnStart, $iState)
+	GUICtrlSetState($hLiveBtnPaste, $iState)
+	GUICtrlSetState($hLiveLine, $iState)
+	GUICtrlSetState($hLiveProgLabel, $iState)
+	GUICtrlSetState($hLiveProgSize, $iState)
+	GUICtrlSetState($hLiveProgBG, $iState)
+	GUICtrlSetState($hLiveProgBar, $iState)
+EndFunc   ;==>_ShowLiveControls
+
+; ============================================================
 ;  URL bereinigen
 ; ============================================================
 Func _CleanURL($sURL)
@@ -434,7 +613,94 @@ Func _CleanURL($sURL)
 EndFunc   ;==>_CleanURL
 
 ; ============================================================
-;  yt-dlp starten (Video oder MP3) – mit StdoutRead für Fortschritt
+;  Live-View: yt-dlp starten, Datei oeffnen
+; ============================================================
+Func _StartLive($sURL, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
+	$sURL = StringStripWS($sURL, 3)
+	If Not StringRegExp($sURL, "(?i)^https?://") Then
+		GUICtrlSetData($hLiveProgLabel, "Bad URL.")
+		Return
+	EndIf
+	; Playlist-Parameter raus
+	Local $iAmp = StringInStr($sURL, "&")
+	If $iAmp > 0 Then $sURL = StringLeft($sURL, $iAmp - 1)
+
+	GUICtrlSetPos($hLiveProgBar, 24, 290, 0, 10)
+	GUICtrlSetData($hLiveProgLabel, "Starting...")
+	GUICtrlSetData($hLiveProgSize, "")
+	GUICtrlSetData($hLiveBtnStart, "Stop")
+	GUICtrlSetBkColor($hLiveBtnStart, 0x444444)
+
+	Local $sOutFile = $DL_DIR & "\_watch_live.mp4"
+	Local $sCMD = '"' & $YTDLP_EXE & '" --no-playlist --no-part -f "best[ext=mp4]/best" --newline -o "' & $sOutFile & '" "' & $sURL & '"'
+
+	If $bShowCMD Then Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
+	$hDLProc = Run($sCMD, $DL_DIR, @SW_HIDE, 2)
+
+	; Warten bis Datei existiert, dann Player
+	GUICtrlSetData($hLiveProgLabel, "Waiting for file...")
+	Local $iWait = 0
+	Do
+		Sleep(300)
+		$iWait += 1
+		GUIGetMsg()
+	Until (FileExists($sOutFile) And FileGetSize($sOutFile) > 0) Or $iWait > 50
+	If FileExists($sOutFile) And FileGetSize($sOutFile) > 0 Then
+		ShellExecute($sOutFile)
+		GUICtrlSetData($hLiveProgLabel, "Watching _watch_live.mp4 ...")
+	Else
+		GUICtrlSetData($hLiveProgLabel, "File not ready yet, download running...")
+	EndIf
+EndFunc   ;==>_StartLive
+
+; ============================================================
+;  Live-Fortschritt lesen
+; ============================================================
+Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
+	Local $sLine = StdoutRead($hDLProc)
+	If @error Then
+		$hDLProc = 0
+		GUICtrlSetPos($hLiveProgBar, 24, 290, 512, 10)
+		GUICtrlSetData($hLiveProgLabel, "Done.")
+		GUICtrlSetData($hLiveProgSize, "")
+		GUICtrlSetData($hLiveBtnStart, "Start Live")
+		GUICtrlSetBkColor($hLiveBtnStart, 0x880000)
+		Return
+	EndIf
+	If $sLine = "" Then Return
+
+	Local $aLines = StringSplit($sLine, @LF, 1)
+	For $i = 1 To $aLines[0]
+		Local $sTrimmed = StringStripWS($aLines[$i], 3)
+		If StringLen($sTrimmed) < 4 Then ContinueLoop
+
+		; Groesse aus [download]-Zeile
+		Local $aSize = StringRegExp($sTrimmed, "\[download\]\s+([\d\.]+\s*(?:KiB|MiB|GiB))", 1)
+		If Not @error And UBound($aSize) >= 1 Then
+			GUICtrlSetData($hLiveProgSize, $aSize[0])
+			Local $sShort = StringRegExpReplace($sTrimmed, "^\[download\]\s+", "")
+			If StringLen($sShort) > 65 Then $sShort = StringLeft($sShort, 65) & "..."
+			GUICtrlSetData($hLiveProgLabel, $sShort)
+			; Pulsierender Balken
+			Static Local $iPulse = 0, $iPulseDir = 1
+			$iPulse += $iPulseDir * 24
+			If $iPulse >= 480 Then $iPulseDir = -1
+			If $iPulse <= 0 Then $iPulseDir = 1
+			GUICtrlSetPos($hLiveProgBar, 24, 290, $iPulse, 10)
+			ContinueLoop
+		EndIf
+
+		If StringInStr($sTrimmed, "ERROR") Then
+			GUICtrlSetData($hLiveProgLabel, StringLeft($sTrimmed, 65))
+			$hDLProc = 0
+			GUICtrlSetData($hLiveBtnStart, "Start Live")
+			GUICtrlSetBkColor($hLiveBtnStart, 0x880000)
+		EndIf
+	Next
+EndFunc   ;==>_ReadLiveProgress
+
+; ============================================================
+;  yt-dlp starten (Video oder MP3)
 ; ============================================================
 Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
 	If Not FileExists($YTDLP_EXE) Then
@@ -442,20 +708,17 @@ Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
 		_SetStatus($hStatusLabel, "yt-dlp.exe not found!", 0xFF5252)
 		Return
 	EndIf
-
 	If Not StringRegExp($sURL, "(?i)^https?://") Then
 		_SetStatus($hStatusLabel, "Bad Link.", 0xFFAA00)
 		Return
 	EndIf
 
-	; Fortschrittsbalken zurücksetzen
 	GUICtrlSetPos($hProgBar, 24, 364, 0, 12)
 	GUICtrlSetBkColor($hProgBar, $CLR_ACCENT)
 	GUICtrlSetData($hProgLabel, "Starting Download...")
 	GUICtrlSetData($hBtnDownload, "Stop")
 	GUICtrlSetBkColor($hBtnDownload, 0xAA0000)
 	GUICtrlSetData($hProgPct, "")
-	; Play-Button zuruecksetzen
 	$sLastFile = ""
 	If Not $bPlaylistMode Then
 		GUICtrlSetBkColor($hBtnPlay, 0x1A3A1A)
@@ -475,40 +738,28 @@ Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
 			Return
 		EndIf
 		_SetStatus($hStatusLabel, "MP3 Download started ...", 0x4FC3F7)
-		; --newline: eine Zeile pro Fortschritts-Update statt \r-Overwrite
 		$sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '"' & $sPlFlag & ' -x --audio-format mp3 --audio-quality 0 --newline -o "' & $DL_DIR & '\%(title)s.%(ext)s" "' & $sURL & '"'
 	Else
 		_SetStatus($hStatusLabel, "Video Download started ...", 0x4FC3F7)
 		$sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '"' & $sPlFlag & ' -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 --newline -o "' & $DL_DIR & '\%(title)s.%(ext)s" "' & $sURL & '"'
 	EndIf
 
-	; Wenn CMD-Fenster gewünscht: sichtbares cmd /k zusätzlich starten (nur zum Anschauen)
-	If $bShowCMD Then
-		Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
-	EndIf
-
-	; Versteckter Prozess mit StdIO für Fortschrittsauslesen (immer, unabhängig vom Toggle)
-	; $STDOUT_CHILD = 1, $STDERR_MERGED = 8 -> Flag 2 = stdout+stderr zusammen lesen
+	If $bShowCMD Then Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
 	$hDLProc = Run($sCMD, $DL_DIR, @SW_HIDE, 2)
 EndFunc   ;==>_StartDownload
 
 ; ============================================================
-;  Fortschritt aus yt-dlp Output lesen und GUI updaten
-;  Wird in der Hauptschleife bei jedem Durchlauf aufgerufen
+;  Fortschritt aus yt-dlp Output lesen
 ; ============================================================
 Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 	Local $sLine = StdoutRead($hDLProc)
-
-	; @error = Prozess beendet / EOF
 	If @error Then
 		GUICtrlSetPos($hProgBar, 24, 364, 512, 12)
 		GUICtrlSetBkColor($hProgBar, 0x00AA44)
 		GUICtrlSetData($hProgPct, "100%")
 		GUICtrlSetData($hProgLabel, "Download DONE!")
 		_SetStatus($hStatus, "DONE! Saved to: " & $DL_DIR, 0x00AA44)
-		; Play-Button aktivieren (nur Einzelmodus)
 		If Not $bPlaylistMode Then
-			; Fallback: wenn sLastFile leer oder nicht existent -> neueste Datei im DL_DIR suchen
 			If $sLastFile = "" Or Not FileExists($sLastFile) Then
 				Local $sSearch = FileFindFirstFile($DL_DIR & "\*.*")
 				Local $sNewest = ""
@@ -519,7 +770,7 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 						Local $sFullPath = $DL_DIR & "\" & $sFound
 						Local $sExt = StringLower(StringRight($sFound, 4))
 						If $sExt = ".mp4" Or $sExt = ".mp3" Or $sExt = ".mkv" Or $sExt = ".webm" Then
-							Local $tFile = FileGetTime($sFullPath, 0, 1) ; 0=modified, 1=as timestamp
+							Local $tFile = FileGetTime($sFullPath, 0, 1)
 							If $tFile > $tNewest Then
 								$tNewest = $tFile
 								$sNewest = $sFullPath
@@ -547,10 +798,8 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		GUICtrlSetBkColor($hBtnDownload, 0x00AA44)
 		Return
 	EndIf
-
 	If $sLine = "" Then Return
 
-	; Alle Zeilen verarbeiten (nicht nur letzte) – wichtig fuer Destination + Merger
 	Local $aLines = StringSplit($sLine, @LF, 1)
 	For $i = 1 To $aLines[0]
 		Local $sTrimmed = StringStripWS($aLines[$i], 3)
@@ -561,11 +810,9 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 EndFunc   ;==>_ReadProgress
 
 ; ============================================================
-;  Eine yt-dlp Output-Zeile auswerten und GUI updaten
-;  yt-dlp --newline Format: [download]  xx.x% of xx.xxMiB at xx.xxMiB/s ETA xx:xx
+;  Eine yt-dlp Output-Zeile auswerten
 ; ============================================================
 Func _ParseProgressLine($sLine, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
-	; Fortschritts-Zeile: "[download]  xx.x%"
 	Local $aMatch = StringRegExp($sLine, "\[download\]\s+([\d\.]+)%", 1)
 	If Not @error And UBound($aMatch) >= 1 Then
 		Local $fPct = Number($aMatch[0])
@@ -575,14 +822,12 @@ Func _ParseProgressLine($sLine, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		GUICtrlSetPos($hProgBar, 24, 364, $iWidth, 12)
 		GUICtrlSetBkColor($hProgBar, $CLR_ACCENT)
 		GUICtrlSetData($hProgPct, StringFormat("%.0f%%", $fPct))
-		; Kurzinfo aus der Zeile (MiB, Speed, ETA) – auf 65 Zeichen kürzen
 		Local $sShort = StringRegExpReplace($sLine, "^\[download\]\s+", "")
 		If StringLen($sShort) > 65 Then $sShort = StringLeft($sShort, 65) & "..."
 		GUICtrlSetData($hProgLabel, $sShort)
 		Return
 	EndIf
 
-	; "Destination:"-Zeile -> Dateiname anzeigen + merken
 	Local $aDest = StringRegExp($sLine, "\[download\] Destination: (.+)", 1)
 	If Not @error And UBound($aDest) >= 1 Then
 		$sLastFile = StringStripWS($aDest[0], 3)
@@ -594,13 +839,9 @@ Func _ParseProgressLine($sLine, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		Return
 	EndIf
 
-	; Merge / Konvertierung – finalen Dateinamen aus Merger-Zeile holen
-	; yt-dlp gibt aus: [Merger] Merging formats into "C:\...\titel.mp4"
-	; oder:            [Merger] Merging formats into "titel.mp4"
 	Local $aMerge = StringRegExp($sLine, '\[Merger\].*?"(.+?)"', 1)
 	If Not @error And UBound($aMerge) >= 1 Then
 		Local $sMergedFile = StringStripWS($aMerge[0], 3)
-		; Wenn kein voller Pfad -> DL_DIR davor haengen
 		If Not StringRegExp($sMergedFile, "^[A-Za-z]:\\") Then
 			$sMergedFile = $DL_DIR & "\" & $sMergedFile
 		EndIf
@@ -617,7 +858,6 @@ Func _ParseProgressLine($sLine, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		Return
 	EndIf
 
-	; Fehler
 	If StringInStr($sLine, "ERROR") Then
 		GUICtrlSetBkColor($hProgBar, 0xFF5252)
 		If StringLen($sLine) > 65 Then
@@ -684,8 +924,6 @@ Func _StartupCheck()
 			Return
 		EndIf
 		_ProgBar($hProgBar, 85)
-		GUICtrlSetData($hProgInfo, "Downloading 7-Zip tools...")
-		; Aktuelle 7-Zip Version per API holen (Fallback: 26.01)
 		GUICtrlSetData($hProgInfo, "Checking latest 7-Zip version...")
 		Local $s7zrURL = _Get7zrURL()
 		Local $aTag7z = StringRegExp($s7zrURL, "/download/([^/]+)/", 1)
@@ -735,11 +973,10 @@ Func _StartupCheck()
 EndFunc   ;==>_StartupCheck
 
 ; ============================================================
-;  Datei nativ per InetGet herunterladen (kein curl nötig, Wine-kompatibel)
+;  Datei nativ per InetGet herunterladen (Wine-kompatibel)
 ; ============================================================
 Func _Download($sURL, $sDest, $hProgBar = 0, $iProgStart = 0, $iProgEnd = 100)
 	Local $hInet = InetGet($sURL, $sDest, $INET_FORCERELOAD, 1)
-
 	Do
 		If $hProgBar <> 0 Then
 			Local $iReceived = InetGetInfo($hInet, 0)
@@ -754,23 +991,18 @@ Func _Download($sURL, $sDest, $hProgBar = 0, $iProgStart = 0, $iProgEnd = 100)
 		GUIGetMsg()
 		Sleep(100)
 	Until InetGetInfo($hInet, 2)
-
 	InetClose($hInet)
-
-	; Wine: warten bis Datei wirklich auf der Platte liegt (max 5 Sek)
 	Local $iFlushWait = 0
 	Do
 		Sleep(100)
 		$iFlushWait += 1
 	Until (FileExists($sDest) And FileGetSize($sDest) > 0) Or $iFlushWait > 50
-
 	If FileGetSize($sDest) = 0 Then
 		FileDelete($sDest)
 		Return False
 	EndIf
 	Return True
 EndFunc   ;==>_Download
-
 
 ; ============================================================
 ;  ZIP entpacken via Shell.Application (Wine-kompatibel)
@@ -792,7 +1024,6 @@ Func _UnZip($sZipFile, $sDestFolder)
 	If $iCount = 0 Then Return SetError(4)
 	Local $oNsDest = $oShell.NameSpace($sDestFolder)
 	If @error Or Not IsObj($oNsDest) Then Return SetError(7)
-	; Index-Schleife statt For..In (kompatibler unter Wine)
 	For $i = 0 To $iCount - 1
 		Local $oFile = $oItems.Item($i)
 		If IsObj($oFile) Then $oNsDest.CopyHere($oFile, 4 + 16)
@@ -800,14 +1031,12 @@ Func _UnZip($sZipFile, $sDestFolder)
 EndFunc   ;==>_UnZip
 
 ; ============================================================
-;  ffmpeg.exe aus ZIP holen – unter Wine: unzip, unter Windows: Shell.Application
+;  ffmpeg.exe aus ZIP holen
 ; ============================================================
 Func _UnzipFFmpeg($sZip, $sDestDir)
 	Local $sTmp = $sDestDir & "\ffmpeg_extracted", $s7zr = $sDestDir & "\7zr.exe", $s7za = $sDestDir & "\7za.exe", $sExtra = $sDestDir & "\7z_extra.7z"
 	DirCreate($sTmp)
-
 	If _IsWine() Then
-		; Stage 1: 7zr sicherstellen
 		If Not FileExists($s7zr) Or FileGetSize($s7zr) < 100000 Then
 			Local $s7zrURLFallback = _Get7zrURL()
 			_Download($s7zrURLFallback, $s7zr)
@@ -815,8 +1044,6 @@ Func _UnzipFFmpeg($sZip, $sDestDir)
 				Sleep(100)
 			Until FileExists($s7zr)
 		EndIf
-
-		; Stage 2: 7za sicherstellen (robust)
 		If Not FileExists($s7za) Then
 			If Not FileExists($sExtra) Then
 				Local $aTagFB = StringRegExp(_Get7zrURL(), "/download/([^/]+)/", 1)
@@ -830,10 +1057,7 @@ Func _UnzipFFmpeg($sZip, $sDestDir)
 			Local $i7zaExit = RunWait('"' & $s7zr & '" e "' & $sExtra & '" 7za.exe -y', $sDestDir, @SW_HIDE)
 			If $i7zaExit <> 0 Or Not FileExists($s7za) Then Return False
 		EndIf
-		; Cleanup extra archive
 		If FileExists($sExtra) Then FileDelete($sExtra)
-
-		; Stage 3: ffmpeg.zip entpacken (nur wenn 7za wirklich existiert)
 		If FileExists($s7za) Then
 			Local $iExit = RunWait('"' & $s7za & '" x "' & $sZip & '" -o"' & $sTmp & '" -y', $sDestDir, @SW_HIDE)
 			If $iExit <> 0 Then Return False
@@ -844,28 +1068,19 @@ Func _UnzipFFmpeg($sZip, $sDestDir)
 		_UnZip($sZip, $sTmp)
 		Sleep(2000)
 	EndIf
-
 	_FindAndCopyExe($sTmp, $sDestDir)
 	DirRemove($sTmp, 1)
 	Return FileExists($sDestDir & "\ffmpeg.exe")
 EndFunc   ;==>_UnzipFFmpeg
 
-; Holt die aktuelle 7zr.exe Download-URL ueber die GitHub API
-
-; Konvertiert Windows-Pfad (Z:\home\...) in Linux-Pfad (/home/...)
-
 ; Prueft ob das Script unter Wine laeuft
 Func _IsWine()
-	; Methode 1: Registry-Key
 	RegRead("HKLM\Software\Wine", "Version")
 	If @error = 0 Then Return True
-	; Methode 2: @ScriptDir oder @TempDir faengt mit Z:\ an (Wine mapped Linux-Root auf Z:)
 	If StringLeft(@TempDir, 2) = "Z:" Or StringLeft(@TempDir, 2) = "z:" Then Return True
 	If StringLeft(@ScriptDir, 2) = "Z:" Or StringLeft(@ScriptDir, 2) = "z:" Then Return True
 	Return False
 EndFunc   ;==>_IsWine
-
-
 
 Func _FindAndCopyExe($sSearchDir, $sDestDir)
 	Local $hFind = FileFindFirstFile($sSearchDir & "\*")
@@ -885,23 +1100,19 @@ Func _FindAndCopyExe($sSearchDir, $sDestDir)
 	FileClose($hFind)
 EndFunc   ;==>_FindAndCopyExe
 
-; ============================================================
-;  Progress-Bar Breite setzen (0-100) – fuer Startup-Fenster
-; ============================================================
+; Progress-Bar Breite setzen (0-100) fuer Startup-Fenster
 Func _ProgBar($hBar, $iPercent)
 	GUICtrlSetPos($hBar, 16, 68, Int(388 * $iPercent / 100), 8)
 EndFunc   ;==>_ProgBar
 
-; ============================================================
-;  Statuszeile setzen
-; ============================================================
+; Statuszeile setzen
 Func _SetStatus($hLabel, $sText, $iColor)
 	GUICtrlSetData($hLabel, "  " & $sText)
 	GUICtrlSetColor($hLabel, $iColor)
 EndFunc   ;==>_SetStatus
 
 ; ============================================================
-;  Update: yt-dlp.exe + ffmpeg.exe neu laden (ueberschreiben)
+;  Update: yt-dlp.exe + ffmpeg.exe neu laden
 ; ============================================================
 Func _UpdateTools($hStatus, $hProgBar, $hProgLabel, $hProgPct)
 	_SetStatus($hStatus, "Checking for updates...", 0x4FC3F7)
@@ -910,7 +1121,6 @@ Func _UpdateTools($hStatus, $hProgBar, $hProgLabel, $hProgPct)
 	GUICtrlSetBkColor($hProgBar, $CLR_ACCENT)
 	GUICtrlSetData($hProgPct, "")
 
-	; yt-dlp updaten
 	GUICtrlSetData($hProgLabel, "Updating yt-dlp.exe...")
 	Local $sURL1 = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
 	Local $sTmp1 = $YTDLP_EXE & ".tmp"
@@ -924,14 +1134,12 @@ Func _UpdateTools($hStatus, $hProgBar, $hProgLabel, $hProgPct)
 		Return
 	EndIf
 
-	; ffmpeg updaten
 	GUICtrlSetData($hProgLabel, "Downloading ffmpeg... (~90 MB)")
 	Local $sURL2 = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 	Local $sZip = $BIN_DIR & "\ffmpeg_update.zip"
 	If _Download($sURL2, $sZip, $hProgBar, 45, 85) Then
 		GUICtrlSetData($hProgLabel, "Unpacking ffmpeg.exe...")
 		GUICtrlSetPos($hProgBar, 24, 364, Int(512 * 0.85), 12)
-		; alte ffmpeg EXEs loeschen
 		FileDelete($BIN_DIR & "\ffmpeg.exe")
 		FileDelete($BIN_DIR & "\ffprobe.exe")
 		FileDelete($BIN_DIR & "\ffplay.exe")
@@ -955,16 +1163,13 @@ Func _UpdateTools($hStatus, $hProgBar, $hProgLabel, $hProgPct)
 	GUICtrlSetData($hProgLabel, "All tools updated!")
 	_SetStatus($hStatus, "Update complete!", 0x00AA44)
 EndFunc   ;==>_UpdateTools
-;
+
 Func _Get7zrURL()
-	; GitHub API: latest release von ip7z/7zip
 	Local $sAPI = "https://api.github.com/repos/ip7z/7zip/releases/latest"
 	Local $sJSON = BinaryToString(InetRead($sAPI, 1))
-	; Tag-Name extrahieren z.B. "26.01" -> "2601"
 	Local $aTag = StringRegExp($sJSON, '"tag_name"\s*:\s*"([^"]+)"', 1)
 	If @error Or UBound($aTag) < 1 Then Return "https://github.com/ip7z/7zip/releases/download/26.01/7zr.exe"
 	Local $sTag = $aTag[0]
-	; Versionsnummer fuer Dateiname: "26.01" -> "2601"
 	Local $sVer = StringReplace($sTag, ".", "")
 	Return "https://github.com/ip7z/7zip/releases/download/" & $sTag & "/7zr.exe"
 EndFunc   ;==>_Get7zrURL
