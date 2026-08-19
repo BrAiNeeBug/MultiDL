@@ -43,6 +43,9 @@ Global $bPlaylistMode = False
 Global $bShowCMD = False
 ; ---- Aktueller yt-dlp Prozess Handle ----
 Global $hDLProc = 0
+; ---- Download-Fehler erkannt ----
+Global $bDLFailed = False
+Global $sDLError = ""
 ; ---- Zuletzt heruntergeladene Datei (fuer Play-Button) ----
 Global $sLastFile = ""
 Global $bPlayerOpened = False
@@ -639,7 +642,9 @@ Func _StartLive($sURL, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 	Local $sCMD = '"' & $YTDLP_EXE & '" --no-playlist --no-part -f "best[ext=mp4]/best" --newline -o "' & $DL_DIR & '\_watch_live.mp4" "' & $sURL & '"'
 	FileDelete($DL_DIR & "\_watch_live.mp4")
 	If $bShowCMD Then Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
-	$hDLProc = Run($sCMD, $DL_DIR, @SW_HIDE, 2)
+	$bDLFailed = False
+	$sDLError = ""
+	$hDLProc = Run($sCMD, $DL_DIR, @SW_HIDE, 6)
 	; Player wird in _ReadLiveProgress geoeffnet sobald Datei existiert
 EndFunc   ;==>_StartLive
 
@@ -749,68 +754,131 @@ Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
 	EndIf
 
 	If $bShowCMD Then Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
-	$hDLProc = Run($sCMD, $DL_DIR, @SW_HIDE, 2)
+	$bDLFailed = False
+	$sDLError = ""
+	$hDLProc = Run($sCMD, $DL_DIR, @SW_HIDE, 6) ; STDOUT + STDERR
 EndFunc   ;==>_StartDownload
 
 ; ============================================================
 ;  Fortschritt aus yt-dlp Output lesen
 ; ============================================================
 Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
-	Local $sLine = StdoutRead($hDLProc)
-	If @error Then
-		GUICtrlSetPos($hProgBar, 24, 364, 512, 12)
-		GUICtrlSetBkColor($hProgBar, 0x00AA44)
-		GUICtrlSetData($hProgPct, "100%")
-		GUICtrlSetData($hProgLabel, "Download DONE!")
-		_SetStatus($hStatus, "DONE! Saved to: " & $DL_DIR, 0x00AA44)
-		If Not $bPlaylistMode Then
-			If $sLastFile = "" Or Not FileExists($sLastFile) Then
-				Local $sSearch = FileFindFirstFile($DL_DIR & "\*.*")
-				Local $sNewest = ""
-				Local $tNewest = 0
-				If $sSearch <> -1 Then
-					Local $sFound = FileFindNextFile($sSearch)
-					While Not @error
-						Local $sFullPath = $DL_DIR & "\" & $sFound
-						Local $sExt = StringLower(StringRight($sFound, 4))
-						If $sExt = ".mp4" Or $sExt = ".mp3" Or $sExt = ".mkv" Or $sExt = ".webm" Then
-							Local $tFile = FileGetTime($sFullPath, 0, 1)
-							If $tFile > $tNewest Then
-								$tNewest = $tFile
-								$sNewest = $sFullPath
-							EndIf
-						EndIf
-						$sFound = FileFindNextFile($sSearch)
-					WEnd
-					FileClose($sSearch)
+	; yt-dlp writes errors to STDERR. Therefore read BOTH pipes.
+	Local $sStdout = StdoutRead($hDLProc)
+	Local $sStderr = StderrRead($hDLProc)
+
+	; Parse normal output.
+	If $sStdout <> "" Then
+		Local $aLines = StringSplit($sStdout, @LF, 1)
+		For $i = 1 To $aLines[0]
+			Local $sTrimmed = StringStripWS($aLines[$i], 3)
+			If StringLen($sTrimmed) > 3 Then
+				If StringInStr($sTrimmed, "ERROR") Or StringInStr($sTrimmed, "Error") _
+						Or StringInStr($sTrimmed, "403 Forbidden") _
+						Or StringInStr($sTrimmed, "HTTP Error 403") Then
+					$bDLFailed = True
+					$sDLError = $sTrimmed
+					GUICtrlSetBkColor($hProgBar, 0xFF5252)
+					GUICtrlSetData($hProgPct, "ERROR")
+					GUICtrlSetData($hProgLabel, StringLeft($sTrimmed, 75))
+					_SetStatus($hStatus, "ERROR! Download failed.", 0xFF5252)
+				Else
+					_ParseProgressLine($sTrimmed, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 				EndIf
-				If $sNewest <> "" Then $sLastFile = $sNewest
 			EndIf
-			GUICtrlSetBkColor($hBtnPlay, 0x00AA44)
-			GUICtrlSetColor($hBtnPlay, $CLR_TEXT)
-			If $sLastFile <> "" Then
-				Local $sDispName = $sLastFile
-				Local $iSlash = StringInStr($sDispName, "\", 0, -1)
-				If $iSlash > 0 Then $sDispName = StringMid($sDispName, $iSlash + 1)
-				If StringLen($sDispName) > 60 Then $sDispName = StringLeft($sDispName, 60) & "..."
-				GUICtrlSetData($hPlayLabel, "> " & $sDispName)
-				GUICtrlSetColor($hPlayLabel, 0x00AA44)
+		Next
+	EndIf
+
+	; Parse STDERR too. This is where yt-dlp normally prints:
+	; ERROR: unable to download video data: HTTP Error 403: Forbidden
+	If $sStderr <> "" Then
+		Local $aErrLines = StringSplit($sStderr, @LF, 1)
+		For $i = 1 To $aErrLines[0]
+			Local $sErrTrimmed = StringStripWS($aErrLines[$i], 3)
+			If StringLen($sErrTrimmed) > 3 Then
+				If StringInStr($sErrTrimmed, "ERROR") Or StringInStr($sErrTrimmed, "Error") _
+						Or StringInStr($sErrTrimmed, "403 Forbidden") _
+						Or StringInStr($sErrTrimmed, "HTTP Error 403") Then
+					$bDLFailed = True
+					$sDLError = $sErrTrimmed
+					GUICtrlSetBkColor($hProgBar, 0xFF5252)
+					GUICtrlSetData($hProgPct, "ERROR")
+					GUICtrlSetData($hProgLabel, StringLeft($sErrTrimmed, 75))
+					_SetStatus($hStatus, "ERROR! Download failed.", 0xFF5252)
+				EndIf
 			EndIf
+		Next
+	EndIf
+
+	; Do NOT use StdoutRead(@error) as a success signal.
+	; A download is successful only after the process has actually exited
+	; and no yt-dlp error was received.
+	If ProcessExists($hDLProc) Then Return
+
+	If $bDLFailed Then
+		GUICtrlSetPos($hProgBar, 24, 364, 512, 12)
+		GUICtrlSetBkColor($hProgBar, 0xFF5252)
+		GUICtrlSetData($hProgPct, "ERROR")
+		If $sDLError <> "" Then
+			GUICtrlSetData($hProgLabel, StringLeft($sDLError, 75))
+		Else
+			GUICtrlSetData($hProgLabel, "Download failed.")
 		EndIf
+		_SetStatus($hStatus, "ERROR! Download failed.", 0xFF5252)
 		$hDLProc = 0
+		$bDLFailed = False
+		$sDLError = ""
 		GUICtrlSetData($hBtnDownload, "Start")
 		GUICtrlSetBkColor($hBtnDownload, 0x00AA44)
 		Return
 	EndIf
-	If $sLine = "" Then Return
 
-	Local $aLines = StringSplit($sLine, @LF, 1)
-	For $i = 1 To $aLines[0]
-		Local $sTrimmed = StringStripWS($aLines[$i], 3)
-		If StringLen($sTrimmed) > 3 Then
-			_ParseProgressLine($sTrimmed, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
+	; Process exited without an ERROR line: now it is safe to report DONE.
+	GUICtrlSetPos($hProgBar, 24, 364, 512, 12)
+	GUICtrlSetBkColor($hProgBar, 0x00AA44)
+	GUICtrlSetData($hProgPct, "100%")
+	GUICtrlSetData($hProgLabel, "Download DONE!")
+	_SetStatus($hStatus, "DONE! Saved to: " & $DL_DIR, 0x00AA44)
+
+	If Not $bPlaylistMode Then
+		If $sLastFile = "" Or Not FileExists($sLastFile) Then
+			Local $sSearch = FileFindFirstFile($DL_DIR & "\*.*")
+			Local $sNewest = ""
+			Local $tNewest = 0
+			If $sSearch <> -1 Then
+				Local $sFound = FileFindNextFile($sSearch)
+				While Not @error
+					Local $sFullPath = $DL_DIR & "\" & $sFound
+					Local $sExt = StringLower(StringRight($sFound, 4))
+					If $sExt = ".mp4" Or $sExt = ".mp3" Or $sExt = ".mkv" Or $sExt = ".webm" Then
+						Local $tFile = FileGetTime($sFullPath, 0, 1)
+						If $tFile > $tNewest Then
+							$tNewest = $tFile
+							$sNewest = $sFullPath
+						EndIf
+					EndIf
+					$sFound = FileFindNextFile($sSearch)
+				WEnd
+				FileClose($sSearch)
+			EndIf
+			If $sNewest <> "" Then $sLastFile = $sNewest
 		EndIf
-	Next
+
+		GUICtrlSetBkColor($hBtnPlay, 0x00AA44)
+		GUICtrlSetColor($hBtnPlay, $CLR_TEXT)
+		If $sLastFile <> "" Then
+			Local $sDispName = $sLastFile
+			Local $iSlash = StringInStr($sDispName, "\", 0, -1)
+			If $iSlash > 0 Then $sDispName = StringMid($sDispName, $iSlash + 1)
+			If StringLen($sDispName) > 60 Then $sDispName = StringLeft($sDispName, 60) & "..."
+			GUICtrlSetData($hPlayLabel, "> " & $sDispName)
+			GUICtrlSetColor($hPlayLabel, 0x00AA44)
+		EndIf
+	EndIf
+
+	$hDLProc = 0
+	GUICtrlSetData($hBtnDownload, "Start")
+	GUICtrlSetBkColor($hBtnDownload, 0x00AA44)
 EndFunc   ;==>_ReadProgress
 
 ; ============================================================
@@ -863,16 +931,19 @@ Func _ParseProgressLine($sLine, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 	EndIf
 
 	If StringInStr($sLine, "ERROR") Then
+		$bDLFailed = True
+		$sDLError = $sLine
+
 		GUICtrlSetBkColor($hProgBar, 0xFF5252)
 		If StringLen($sLine) > 65 Then
 			GUICtrlSetData($hProgLabel, StringLeft($sLine, 65) & "...")
 		Else
 			GUICtrlSetData($hProgLabel, $sLine)
 		EndIf
-		_SetStatus($hStatus, "ERROR! Look CMD-Window for Details.", 0xFF5252)
-		$hDLProc = 0
-		GUICtrlSetData($hBtnDownload, "Start")
-		GUICtrlSetBkColor($hBtnDownload, 0x00AA44)
+		_SetStatus($hStatus, "ERROR! Download failed. Look CMD-Window for Details.", 0xFF5252)
+		; WICHTIG: $hDLProc bleibt gueltig, bis _ReadProgress den
+		; Prozess wirklich beendet/den Stream nicht mehr lesen kann.
+		; Sonst wird der naechste @error faelschlich als DONE behandelt.
 		Return
 	EndIf
 EndFunc   ;==>_ParseProgressLine
