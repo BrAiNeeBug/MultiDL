@@ -21,7 +21,7 @@
 #include <InetConstants.au3>
 
 ; ---- Konstanten ----
-Global Const $APP_TITLE = "BrAiNee's MultiDL v6"
+Global Const $APP_TITLE = "BrAiNee's MultiDL v7"
 Global Const $BIN_DIR = @ScriptDir & "\bin"
 Global Const $DL_DIR = @ScriptDir & "\MultiDL-Downloads"
 Global Const $YTDLP_EXE = $BIN_DIR & "\yt-dlp.exe"
@@ -32,6 +32,8 @@ Global Const $CLR_ACCENT = 0xFF0000
 Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
+; ---- SooS added ffmpeg-unzip debug ----
+Global $g_sUnzipDebug = ""
 
 ; ---- Modus: False = Video, True = MP3 ----
 Global $bMP3Mode = False
@@ -963,7 +965,7 @@ Func _StartupCheck()
 		_ProgBar($hProgBar, 100)
 		If Not FileExists($FFMPEG_EXE) Then
 			GUIDelete($hProg)
-			MsgBox(16, $APP_TITLE, "Error: ffmpeg.exe could not be unpacked.")
+			MsgBox(16, $APP_TITLE, "Error: ffmpeg.exe could not be unpacked." & @CRLF & $g_sUnzipDebug)
 			Return
 		EndIf
 	EndIf
@@ -1007,7 +1009,27 @@ Func _Download($sURL, $sDest, $hProgBar = 0, $iProgStart = 0, $iProgEnd = 100, $
 EndFunc   ;==>_Download
 
 ; ============================================================
-;  ZIP entpacken via Shell.Application (Wine-kompatibel)
+;  ZIP entpacken via PowerShell Expand-Archive - zuverlaessiger
+;  als Shell.Application, das auf modernen Windows-Systemen oft
+;  gar nicht mehr greift (z.B. wenn 7-Zip/WinRAR die .zip-
+;  Dateizuordnung uebernommen hat und Windows die Datei nicht mehr
+;  als virtuellen Ordner behandelt).
+; ============================================================
+Func _UnZipPS($sZipFile, $sDestFolder)
+	If Not FileExists($sZipFile) Then Return False
+	If Not FileExists($sDestFolder) Then DirCreate($sDestFolder)
+	Local $sPS1 = @TempDir & "\multidl_unzip_" & @AutoItPID & ".ps1"
+	Local $sScript = "Expand-Archive -LiteralPath '" & StringReplace($sZipFile, "'", "''") & _
+			"' -DestinationPath '" & StringReplace($sDestFolder, "'", "''") & "' -Force"
+	FileDelete($sPS1)
+	FileWrite($sPS1, $sScript)
+	Local $iExit = RunWait('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' & $sPS1 & '"', "", @SW_HIDE)
+	FileDelete($sPS1)
+	Return $iExit = 0
+EndFunc   ;==>_UnZipPS
+
+; ============================================================
+;  ZIP entpacken via Shell.Application (Fallback, falls PowerShell fehlt)
 ; ============================================================
 Func _UnZip($sZipFile, $sDestFolder)
 	If Not FileExists($sZipFile) Then Return SetError(1)
@@ -1035,9 +1057,21 @@ EndFunc   ;==>_UnZip
 ; ============================================================
 ;  ffmpeg.exe aus ZIP holen
 ; ============================================================
+
 Func _UnzipFFmpeg($sZip, $sDestDir)
+	$g_sUnzipDebug = ""
 	Local $sTmp = $sDestDir & "\ffmpeg_extracted", $s7zr = $sDestDir & "\7zr.exe", $s7za = $sDestDir & "\7za.exe", $sExtra = $sDestDir & "\7z_extra.7z"
+
+	; alte/leere Reste eines vorherigen fehlgeschlagenen Versuchs entfernen
+	If FileExists($sTmp) Then DirRemove($sTmp, 1)
 	DirCreate($sTmp)
+
+	; Zip-Download pruefen - unter 50 MB ist mit Sicherheit was schiefgelaufen
+	If Not FileExists($sZip) Or FileGetSize($sZip) < 50000000 Then
+		$g_sUnzipDebug = "Zip fehlt oder zu klein (" & (FileExists($sZip) ? FileGetSize($sZip) : 0) & " Bytes) - Download unvollstaendig."
+		Return False
+	EndIf
+
 	If _IsWine() Then
 		If Not FileExists($s7zr) Or FileGetSize($s7zr) < 100000 Then
 			Local $s7zrURLFallback = _Get7zrURL()
@@ -1045,6 +1079,12 @@ Func _UnzipFFmpeg($sZip, $sDestDir)
 			Do
 				Sleep(100)
 			Until FileExists($s7zr)
+		EndIf
+		; 7za.exe kann von einem frueheren abgebrochenen Lauf beschaedigt/leer liegen -
+		; ohne Groessencheck wuerde das ewig wiederverwendet und die Extraktion
+		; wuerde jedes Mal stillschweigend fehlschlagen
+		If FileExists($s7za) And FileGetSize($s7za) < 400000 Then
+			FileDelete($s7za)
 		EndIf
 		If Not FileExists($s7za) Then
 			If Not FileExists($sExtra) Then
@@ -1057,32 +1097,121 @@ Func _UnzipFFmpeg($sZip, $sDestDir)
 				Until FileExists($sExtra)
 			EndIf
 			Local $i7zaExit = RunWait('"' & $s7zr & '" e "' & $sExtra & '" 7za.exe -y', $sDestDir, @SW_HIDE)
-			If $i7zaExit <> 0 Or Not FileExists($s7za) Then Return False
+			If $i7zaExit <> 0 Or Not FileExists($s7za) Then
+				$g_sUnzipDebug = "7za.exe konnte nicht aus 7z-extra entpackt werden (Exitcode " & $i7zaExit & ")."
+				Return False
+			EndIf
 		EndIf
 		If FileExists($sExtra) Then FileDelete($sExtra)
 		If FileExists($s7za) Then
 			Local $iExit = RunWait('"' & $s7za & '" x "' & $sZip & '" -o"' & $sTmp & '" -y', $sDestDir, @SW_HIDE)
-			If $iExit <> 0 Then Return False
+			If $iExit <> 0 Then
+				$g_sUnzipDebug = "7za.exe Extraktion fehlgeschlagen, Exitcode " & $iExit & " (Zip: " & FileGetSize($sZip) & " Bytes, 7za: " & FileGetSize($s7za) & " Bytes)."
+				Return False
+			EndIf
+			; RunWait kann unter Wine zurueckkommen bevor der Kind-Prozess die
+			; Dateien wirklich fertig auf die Platte geschrieben hat -
+			; zusaetzlich auf eine stabile ffmpeg.exe warten statt ihr blind zu vertrauen
+			_WaitForFile($sTmp, "ffmpeg.exe", 60)
 		Else
+			$g_sUnzipDebug = "7za.exe fehlt nach Download-Versuch."
 			Return False
 		EndIf
 	Else
-		_UnZip($sZip, $sTmp)
-		Sleep(2000)
+		If Not _UnZipPS($sZip, $sTmp) Then
+			; PowerShell fehlgeschlagen oder nicht vorhanden -> alte
+			; Shell.Application-Methode als Fallback probieren
+			_UnZip($sZip, $sTmp)
+		EndIf
+		_WaitForFile($sTmp, "ffmpeg.exe", 180)
 	EndIf
 	_FindAndCopyExe($sTmp, $sDestDir)
-	DirRemove($sTmp, 1)
+	If FileExists($sDestDir & "\ffmpeg.exe") Then
+		DirRemove($sTmp, 1)
+	Else
+		If $g_sUnzipDebug = "" Then
+			Local $iCount = _CountFilesRecursive($sTmp)
+			$g_sUnzipDebug = "ffmpeg.exe wurde nach dem Entpacken nicht im Zip gefunden. " & _
+					$iCount & " Datei(en) liegen zur Kontrolle noch in: " & $sTmp
+		EndIf
+	EndIf
 	Return FileExists($sDestDir & "\ffmpeg.exe")
 EndFunc   ;==>_UnzipFFmpeg
+
+Func _CountFilesRecursive($sDir)
+	Local $iCount = 0
+	Local $hFind = FileFindFirstFile($sDir & "\*")
+	If $hFind = -1 Then Return 0
+	While 1
+		Local $sName = FileFindNextFile($hFind)
+		If @error Then ExitLoop
+		If @extended Then
+			$iCount += _CountFilesRecursive($sDir & "\" & $sName)
+		Else
+			$iCount += 1
+		EndIf
+	WEnd
+	FileClose($hFind)
+	Return $iCount
+EndFunc   ;==>_CountFilesRecursive
 
 ; Prueft ob das Script unter Wine laeuft
 Func _IsWine()
 	RegRead("HKLM\Software\Wine", "Version")
 	If @error = 0 Then Return True
-	If StringLeft(@TempDir, 2) = "Z:" Or StringLeft(@TempDir, 2) = "z:" Then Return True
-	If StringLeft(@ScriptDir, 2) = "Z:" Or StringLeft(@ScriptDir, 2) = "z:" Then Return True
 	Return False
 EndFunc   ;==>_IsWine
+
+; ============================================================
+;  Wartet bis eine Datei rekursiv im Zielordner auftaucht UND
+;  ihre Groesse sich nicht mehr aendert. Noetig weil
+;  Shell.Application CopyHere() asynchron im Hintergrund laeuft -
+;  bei grossen Zips (aktuell ~170 MB) reicht ein festes Sleep()
+;  nicht mehr aus, die Kopie ist dann beim Weiterlaufen des Scripts
+;  noch nicht fertig.
+; ============================================================
+Func _WaitForFile($sSearchDir, $sFileName, $iTimeoutSec = 120)
+	Local $iElapsed = 0, $sFound = "", $iLastSize = -1, $iStableCount = 0
+	Do
+		$sFound = _FindFileRecursive($sSearchDir, $sFileName)
+		If $sFound <> "" Then
+			Local $iSize = FileGetSize($sFound)
+			If $iSize = $iLastSize And $iSize > 0 Then
+				$iStableCount += 1
+				If $iStableCount >= 2 Then Return True
+			Else
+				$iStableCount = 0
+			EndIf
+			$iLastSize = $iSize
+		EndIf
+		Sleep(500)
+		$iElapsed += 0.5
+	Until $iElapsed >= $iTimeoutSec
+	Return ($sFound <> "")
+EndFunc   ;==>_WaitForFile
+
+; Sucht rekursiv nach einer Datei mit gegebenem Namen, gibt vollen Pfad zurueck oder ""
+Func _FindFileRecursive($sSearchDir, $sFileName)
+	Local $hFind = FileFindFirstFile($sSearchDir & "\*")
+	If $hFind = -1 Then Return ""
+	Local $sResult = ""
+	While 1
+		Local $sName = FileFindNextFile($hFind)
+		If @error Then ExitLoop
+		Local $sFullPath = $sSearchDir & "\" & $sName
+		If @extended Then
+			$sResult = _FindFileRecursive($sFullPath, $sFileName)
+			If $sResult <> "" Then ExitLoop
+		Else
+			If StringLower($sName) = StringLower($sFileName) Then
+				$sResult = $sFullPath
+				ExitLoop
+			EndIf
+		EndIf
+	WEnd
+	FileClose($hFind)
+	Return $sResult
+EndFunc   ;==>_FindFileRecursive
 
 Func _FindAndCopyExe($sSearchDir, $sDestDir)
 	Local $hFind = FileFindFirstFile($sSearchDir & "\*")
@@ -1136,7 +1265,7 @@ Func _UpdateTools($hStatus, $hProgBar, $hProgLabel, $hProgPct)
 		Return
 	EndIf
 
-	GUICtrlSetData($hProgLabel, "Downloading ffmpeg... (~90 MB)")
+	GUICtrlSetData($hProgLabel, "Downloading ffmpeg... (~170 MB)")
 	Local $sURL2 = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 	Local $sZip = $BIN_DIR & "\ffmpeg_update.zip"
 	If _Download($sURL2, $sZip, $hProgBar, 45, 85, 24, 364, 512, 12) Then
@@ -1150,7 +1279,7 @@ Func _UpdateTools($hStatus, $hProgBar, $hProgLabel, $hProgPct)
 		If FileExists($FFMPEG_EXE) Then
 			GUICtrlSetData($hProgLabel, "ffmpeg.exe updated!")
 		Else
-			_SetStatus($hStatus, "ffmpeg update failed - unpack error!", 0xFF5252)
+			_SetStatus($hStatus, "ffmpeg update failed - unpack error! " & $g_sUnzipDebug, 0xFF5252)
 			Return
 		EndIf
 	Else
