@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=7.1.0.2
+#AutoIt3Wrapper_Res_Fileversion=7.1.0.3
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=p
 #AutoIt3Wrapper_Add_Includes=n
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
@@ -1003,35 +1003,47 @@ Func _StartupCheck()
 			Return
 		EndIf
 		_ProgBar($hProgBar, 85)
-		GUICtrlSetData($hProgInfo, "Checking latest 7-Zip version...")
-		Local $s7zrURL = _Get7zrURL()
-		Local $aTag7z = StringRegExp($s7zrURL, "/download/([^/]+)/", 1)
-		Local $sTag7z = (Not @error And UBound($aTag7z) >= 1) ? $aTag7z[0] : "26.01"
-		Local $sVer7z = StringReplace($sTag7z, ".", "")
-		Local $s7zaURL = "https://github.com/ip7z/7zip/releases/download/" & $sTag7z & "/7z" & $sVer7z & "-extra.7z"
+		If _IsWine() Then
+			GUICtrlSetData($hProgInfo, "Checking latest 7-Zip version...")
+			Local $s7zrURL = _Get7zrURL()
+			Local $aTag7z = StringRegExp($s7zrURL, "/download/([^/]+)/", 1)
+			Local $sTag7z = (Not @error And UBound($aTag7z) >= 1) ? $aTag7z[0] : "26.00"
+			Local $sVer7z = StringReplace($sTag7z, ".", "")
+			Local $s7zaURL = "https://github.com/ip7z/7zip/releases/download/" & $sTag7z & "/7z" & $sVer7z & "-extra.7z"
 
-		If Not FileExists($BIN_DIR & "\7zr.exe") Or FileGetSize($BIN_DIR & "\7zr.exe") < 100000 Then
-			GUICtrlSetData($hProgInfo, "Downloading 7zr.exe (v" & $sTag7z & ")...")
-			If Not _Download($s7zrURL, $BIN_DIR & "\7zr.exe", $hProgBar, 85, 88) Then
-				GUIDelete($hProg)
-				MsgBox(16, $APP_TITLE, "Error: 7zr.exe could not be downloaded.")
-				Return
+			If Not FileExists($BIN_DIR & "\7zr.exe") Or FileGetSize($BIN_DIR & "\7zr.exe") < 100000 Then
+				GUICtrlSetData($hProgInfo, "Downloading 7zr.exe (v" & $sTag7z & ")...")
+				If Not _Download($s7zrURL, $BIN_DIR & "\7zr.exe", $hProgBar, 85, 88) Then
+					GUIDelete($hProg)
+					MsgBox(16, $APP_TITLE, "Error: 7zr.exe could not be downloaded.")
+					Return
+				EndIf
 			EndIf
-		EndIf
-		If Not FileExists($BIN_DIR & "\7za.exe") Then
-			GUICtrlSetData($hProgInfo, "Downloading 7za.exe...")
-			If Not _Download($s7zaURL, $BIN_DIR & "\7z_extra.7z", $hProgBar, 88, 91) Then
-				GUIDelete($hProg)
-				MsgBox(16, $APP_TITLE, "Error: 7z_extra.7z could not be downloaded.")
-				Return
-			EndIf
-			GUICtrlSetData($hProgInfo, "Extracting 7za.exe...")
-			RunWait('"' & $BIN_DIR & '\7zr.exe" e "' & $BIN_DIR & '\7z_extra.7z" 7za.exe -y', $BIN_DIR, @SW_HIDE)
-			FileDelete($BIN_DIR & "\7z_extra.7z")
-			If Not FileExists($BIN_DIR & "\7za.exe") Then
-				GUIDelete($hProg)
-				MsgBox(16, $APP_TITLE, "Error: 7za.exe could not be extracted." & @CRLF & "Please place 7za.exe manually in: " & $BIN_DIR)
-				Return
+			If Not FileExists($BIN_DIR & "\7za.exe") Or FileGetSize($BIN_DIR & "\7za.exe") < 400000 Then
+				FileDelete($BIN_DIR & "\7za.exe")
+				GUICtrlSetData($hProgInfo, "Downloading 7za.exe...")
+				If Not _Download($s7zaURL, $BIN_DIR & "\7z_extra.7z", $hProgBar, 88, 91) Then
+					GUIDelete($hProg)
+					MsgBox(16, $APP_TITLE, "Error: 7z_extra.7z could not be downloaded.")
+					Return
+				EndIf
+				; War der Download ein 404/Fehlerseiten-Fallback (falscher Versions-Tag),
+				; ist die Datei winzig statt ~1-2 MB - dann lieber sauber abbrechen
+				; statt aus Muell ein "7za.exe" zu extrahieren
+				If FileGetSize($BIN_DIR & "\7z_extra.7z") < 200000 Then
+					FileDelete($BIN_DIR & "\7z_extra.7z")
+					GUIDelete($hProg)
+					MsgBox(16, $APP_TITLE, "Error: 7z-extra.7z Download war fehlerhaft (falscher Versions-Tag " & $sTag7z & "?)." & @CRLF & "Bitte 7za.exe manuell in " & $BIN_DIR & " ablegen.")
+					Return
+				EndIf
+				GUICtrlSetData($hProgInfo, "Extracting 7za.exe...")
+				RunWait('"' & $BIN_DIR & '\7zr.exe" e "' & $BIN_DIR & '\7z_extra.7z" 7za.exe -y', $BIN_DIR, @SW_HIDE)
+				FileDelete($BIN_DIR & "\7z_extra.7z")
+				If Not FileExists($BIN_DIR & "\7za.exe") Then
+					GUIDelete($hProg)
+					MsgBox(16, $APP_TITLE, "Error: 7za.exe could not be extracted." & @CRLF & "Please place 7za.exe manually in: " & $BIN_DIR)
+					Return
+				EndIf
 			EndIf
 		EndIf
 		GUICtrlSetData($hProgInfo, "Unpacking ffmpeg.exe...")
@@ -1164,12 +1176,19 @@ Func _UnzipFFmpeg($sZip, $sDestDir)
 		If Not FileExists($s7za) Then
 			If Not FileExists($sExtra) Then
 				Local $aTagFB = StringRegExp(_Get7zrURL(), "/download/([^/]+)/", 1)
-				Local $sTagFB = (Not @error And UBound($aTagFB) >= 1) ? $aTagFB[0] : "26.01"
+				Local $sTagFB = (Not @error And UBound($aTagFB) >= 1) ? $aTagFB[0] : "26.00"
 				Local $sVerFB = StringReplace($sTagFB, ".", "")
 				_Download("https://github.com/ip7z/7zip/releases/download/" & $sTagFB & "/7z" & $sVerFB & "-extra.7z", $sExtra)
 				Do
 					Sleep(100)
 				Until FileExists($sExtra)
+			EndIf
+			; Bei falschem/nicht-existentem Versions-Tag kommt eine winzige
+			; 404-Fehlerseite statt des echten ~1-2 MB Archivs zurueck
+			If FileGetSize($sExtra) < 200000 Then
+				FileDelete($sExtra)
+				$g_sUnzipDebug = "7z-extra.7z Download war fehlerhaft (falscher Versions-Tag?). Bitte 7za.exe manuell in " & $sDestDir & " ablegen."
+				Return False
 			EndIf
 			Local $i7zaExit = RunWait('"' & $s7zr & '" e "' & $sExtra & '" 7za.exe -y', $sDestDir, @SW_HIDE)
 			If $i7zaExit <> 0 Or Not FileExists($s7za) Then
@@ -1230,8 +1249,19 @@ Func _CountFilesRecursive($sDir)
 	Return $iCount
 EndFunc   ;==>_CountFilesRecursive
 
-; Prueft ob das Script unter Wine laeuft
+; Prueft ob das Script unter Wine laeuft.
+; Primaer: wine_get_version() in ntdll.dll - die von Wine offiziell dafuer
+; vorgesehene Erkennungsfunktion, existiert auf JEDER Wine-Version unabhaengig
+; von der Registry-Konfiguration (die Registry-Methode allein hat sich als
+; unzuverlaessig erwiesen, manche Wine-Prefixe setzen den Key nicht).
 Func _IsWine()
+	Local $hDll = DllOpen("ntdll.dll")
+	If $hDll <> -1 Then
+		Local $aRet = DllCall($hDll, "str", "wine_get_version")
+		DllClose($hDll)
+		If Not @error And IsArray($aRet) Then Return True
+	EndIf
+	; Fallback: Registry-Key
 	RegRead("HKLM\Software\Wine", "Version")
 	If @error = 0 Then Return True
 	Return False
@@ -1374,7 +1404,7 @@ Func _Get7zrURL()
 	Local $sAPI = "https://api.github.com/repos/ip7z/7zip/releases/latest"
 	Local $sJSON = BinaryToString(InetRead($sAPI, 1))
 	Local $aTag = StringRegExp($sJSON, '"tag_name"\s*:\s*"([^"]+)"', 1)
-	If @error Or UBound($aTag) < 1 Then Return "https://github.com/ip7z/7zip/releases/download/26.01/7zr.exe"
+	If @error Or UBound($aTag) < 1 Then Return "https://github.com/ip7z/7zip/releases/download/26.00/7zr.exe"
 	Local $sTag = $aTag[0]
 	Local $sVer = StringReplace($sTag, ".", "")
 	Return "https://github.com/ip7z/7zip/releases/download/" & $sTag & "/7zr.exe"
