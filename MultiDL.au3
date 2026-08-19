@@ -2,8 +2,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=7.1.0.3
-#AutoIt3Wrapper_Res_Fileversion_AutoIncrement=p
 #AutoIt3Wrapper_Add_Includes=n
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
 #AutoIt3Wrapper_Run_Tidy=y
@@ -34,6 +32,9 @@ Global Const $CLR_ACCENT = 0xFF0000
 Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
+; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
+Global Const $APP_VERSION = "7.1.0.2"
+Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
 
@@ -72,6 +73,13 @@ Local $hTitleText = GUICtrlCreateLabel($APP_TITLE, 38, 9, 200, 20)
 GUICtrlSetFont($hTitleText, 10, 700, 0, "Segoe UI")
 GUICtrlSetColor($hTitleText, $CLR_TEXT)
 GUICtrlSetBkColor($hTitleText, $CLR_PANEL)
+
+; Update-Hinweis (nur sichtbar wenn neue Version gefunden wurde)
+Local $hUpdateBadge = GUICtrlCreateLabel("", 246, 9, 190, 20)
+GUICtrlSetFont($hUpdateBadge, 8, 700, 0, "Segoe UI")
+GUICtrlSetColor($hUpdateBadge, 0x0F0F0F)
+GUICtrlSetBkColor($hUpdateBadge, 0xFFAA00)
+GUICtrlSetState($hUpdateBadge, $GUI_HIDE)
 
 ; Live-Button in Titelleiste
 Local $hBtnLive = GUICtrlCreateLabel(" LIVE ", 450, 8, 48, 20)
@@ -302,6 +310,7 @@ GUICtrlSetState($hLiveProgBar, $GUI_HIDE)
 
 ; ---- Fenster anzeigen ----
 GUISetState(@SW_SHOW, $hGUI)
+_CheckForUpdate($hUpdateBadge)
 
 ; ---- Hauptschleife ----
 Local $bDragging = False
@@ -336,6 +345,10 @@ While 1
 			; X-Button
 			If $iRelX >= 518 And $iRelX <= 555 And $iRelY >= 0 And $iRelY <= 36 Then
 				ExitLoop
+			EndIf
+			; Update-Badge (X=246..436, Y=0..36)
+			If $iRelX >= 246 And $iRelX <= 436 And $iRelY >= 0 And $iRelY <= 36 And BitAND(GUICtrlGetState($hUpdateBadge), $GUI_SHOW) = $GUI_SHOW Then
+				ShellExecute("https://github.com/" & $GH_REPO & "/releases/latest")
 			EndIf
 			; LIVE-Button (X=444..502, Y=0..36)
 			If $iRelX >= 444 And $iRelX <= 502 And $iRelY >= 0 And $iRelY <= 36 And $hDLProc = 0 Then
@@ -1399,6 +1412,40 @@ Func _UpdateTools($hStatus, $hProgBar, $hProgLabel, $hProgPct)
 	GUICtrlSetData($hProgLabel, "All tools updated!")
 	_SetStatus($hStatus, "Update complete!", 0x00AA44)
 EndFunc   ;==>_UpdateTools
+
+; ============================================================
+;  Prueft GitHub Releases auf eine neuere Version als $APP_VERSION.
+;  Nicht fatal falls das fehlschlaegt (offline, Rate-Limit etc.) -
+;  dann bleibt einfach kein Hinweis sichtbar.
+; ============================================================
+Func _CheckForUpdate($hUpdateBadge)
+	Local $sJSON = BinaryToString(InetRead("https://api.github.com/repos/" & $GH_REPO & "/releases/latest", 1))
+	If @error Or $sJSON = "" Then Return
+	Local $aTag = StringRegExp($sJSON, '"tag_name"\s*:\s*"([^"]+)"', 1)
+	If @error Or UBound($aTag) < 1 Then Return
+	Local $sRemote = $aTag[0]
+	If StringLeft($sRemote, 1) = "v" Or StringLeft($sRemote, 1) = "V" Then $sRemote = StringMid($sRemote, 2)
+	If _CompareVersion($sRemote, $APP_VERSION) > 0 Then
+		GUICtrlSetData($hUpdateBadge, "⬆ Update: v" & $sRemote)
+		GUICtrlSetState($hUpdateBadge, $GUI_SHOW)
+	EndIf
+EndFunc   ;==>_CheckForUpdate
+
+; Vergleicht zwei Versionsstrings à la "7.1.0.2" nummerisch, Teil fuer Teil.
+; Rueckgabe: 1 wenn $sA neuer, -1 wenn $sA aelter, 0 wenn gleich.
+Func _CompareVersion($sA, $sB)
+	Local $aA = StringSplit($sA, ".", 2)
+	Local $aB = StringSplit($sB, ".", 2)
+	Local $iMax = UBound($aA)
+	If UBound($aB) > $iMax Then $iMax = UBound($aB)
+	For $i = 0 To $iMax - 1
+		Local $iA = ($i < UBound($aA)) ? Number($aA[$i]) : 0
+		Local $iB = ($i < UBound($aB)) ? Number($aB[$i]) : 0
+		If $iA > $iB Then Return 1
+		If $iA < $iB Then Return -1
+	Next
+	Return 0
+EndFunc   ;==>_CompareVersion
 
 Func _Get7zrURL()
 	Local $sAPI = "https://api.github.com/repos/ip7z/7zip/releases/latest"
