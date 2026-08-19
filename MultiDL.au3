@@ -2,6 +2,8 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
+#AutoIt3Wrapper_Res_Fileversion=7.1.0.2
+#AutoIt3Wrapper_Res_Fileversion_AutoIncrement=p
 #AutoIt3Wrapper_Add_Includes=n
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
 #AutoIt3Wrapper_Run_Tidy=y
@@ -623,31 +625,33 @@ EndFunc   ;==>_CleanURL
 ;  Live-View: yt-dlp starten, Datei oeffnen
 ; ============================================================
 Func _StartLive($sURL, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
-	If $hDLProc <> 0 Then Return  ; Sicherheitsnetz: nie doppelt starten
+	If $hDLProc <> 0 Then Return
 	$sURL = StringStripWS($sURL, 3)
 	If Not StringRegExp($sURL, "(?i)^https?://") Then
 		GUICtrlSetData($hLiveProgLabel, "Bad URL.")
 		Return
 	EndIf
-	; Playlist-Parameter raus
+
 	Local $iAmp = StringInStr($sURL, "&")
 	If $iAmp > 0 Then $sURL = StringLeft($sURL, $iAmp - 1)
 
 	GUICtrlSetPos($hLiveProgBar, 24, 290, 0, 10)
+	GUICtrlSetBkColor($hLiveProgBar, 0x0088FF)
 	GUICtrlSetData($hLiveProgLabel, "Waiting for file...")
 	GUICtrlSetData($hLiveProgSize, "")
 	GUICtrlSetData($hLiveBtnStart, "Stop")
 	GUICtrlSetBkColor($hLiveBtnStart, 0x444444)
 
-	Local $sCMD = '"' & $YTDLP_EXE & '" --no-playlist --no-part -f "best[ext=mp4]/best" --newline -o "' & $DL_DIR & '\_watch_live.mp4" "' & $sURL & '"'
+	; HIER WAR DER FEHLER: ffmpeg-location gefehlt + extractor-args hinzugefuegt gegen 403
+	Local $sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '" --no-playlist --no-part --extractor-args "youtube:player_client=android,web" -f "best[ext=mp4]/best" --newline -o "' & $DL_DIR & '\_watch_live.mp4" "' & $sURL & '"'
+
 	FileDelete($DL_DIR & "\_watch_live.mp4")
 	If $bShowCMD Then Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
+
 	$bDLFailed = False
 	$sDLError = ""
 	$hDLProc = Run($sCMD, $DL_DIR, @SW_HIDE, 6)
-	; Player wird in _ReadLiveProgress geoeffnet sobald Datei existiert
 EndFunc   ;==>_StartLive
-
 ; ============================================================
 ;  Live-Fortschritt lesen
 ; ============================================================
@@ -781,7 +785,7 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 					GUICtrlSetBkColor($hProgBar, 0xFF5252)
 					GUICtrlSetData($hProgPct, "ERROR")
 					GUICtrlSetData($hProgLabel, StringLeft($sTrimmed, 75))
-					_SetStatus($hStatus, "ERROR! Download failed.", 0xFF5252)
+					_SetStatus($hStatus, "ERROR! Download failed (try LIVE-Mode!)", 0xFF5252)
 				Else
 					_ParseProgressLine($sTrimmed, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 				EndIf
@@ -804,7 +808,7 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 					GUICtrlSetBkColor($hProgBar, 0xFF5252)
 					GUICtrlSetData($hProgPct, "ERROR")
 					GUICtrlSetData($hProgLabel, StringLeft($sErrTrimmed, 75))
-					_SetStatus($hStatus, "ERROR! Download failed.", 0xFF5252)
+					_SetStatus($hStatus, "ERROR! Download failed (try LIVE-Mode!)", 0xFF5252)
 				EndIf
 			EndIf
 		Next
@@ -824,7 +828,7 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		Else
 			GUICtrlSetData($hProgLabel, "Download failed.")
 		EndIf
-		_SetStatus($hStatus, "ERROR! Download failed.", 0xFF5252)
+		_SetStatus($hStatus, "ERROR! Download failed (try LIVE-Mode!)", 0xFF5252)
 		$hDLProc = 0
 		$bDLFailed = False
 		$sDLError = ""
