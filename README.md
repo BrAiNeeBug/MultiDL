@@ -50,7 +50,7 @@ Nothing — MultiDL installs everything automatically on first launch:
 
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — downloaded from GitHub releases
 - [ffmpeg](https://github.com/BtbN/FFmpeg-Builds) — downloaded and unpacked (~170 MB)
-- [deno](https://github.com/denoland/deno) — JS runtime yt-dlp needs to solve YouTube's signature/PO-token checks; without it, YouTube downloads are prone to `HTTP 403 Forbidden`
+- [deno](https://github.com/denoland/deno) — JS runtime for yt-dlp
 - [7-Zip](https://github.com/ip7z/7zip) — used temporarily for unpacking on Wine/Linux, latest version fetched via GitHub API
 
 All binaries are stored in `.\bin\` next to the executable.
