@@ -16,7 +16,7 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 - **Play last file** — reopen the last downloaded file directly from the GUI
 - **CMD window toggle** — optionally show the yt-dlp console for debugging
 - **One-click updater** — updates yt-dlp and ffmpeg to latest versions
-- **Auto install** — downloads and installs yt-dlp + ffmpeg automatically on first run
+- **Auto install** — downloads and installs yt-dlp + ffmpeg + deno automatically on first run
 - **Wine compatible** — runs on Linux under Wine without native tools
 
 ---
@@ -49,8 +49,9 @@ Click **LIVE** in the title bar to switch to Live View mode.
 Nothing — MultiDL installs everything automatically on first launch:
 
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — downloaded from GitHub releases
-- [ffmpeg](https://github.com/BtbN/FFmpeg-Builds) — downloaded and unpacked (~90 MB)
-- [7-Zip](https://github.com/ip7z/7zip) — used temporarily for unpacking ffmpeg, latest version fetched via GitHub API
+- [ffmpeg](https://github.com/BtbN/FFmpeg-Builds) — downloaded and unpacked (~170 MB)
+- [deno](https://github.com/denoland/deno) — JS runtime yt-dlp needs to solve YouTube's signature/PO-token checks; without it, YouTube downloads are prone to `HTTP 403 Forbidden`
+- [7-Zip](https://github.com/ip7z/7zip) — used temporarily for unpacking on Wine/Linux, latest version fetched via GitHub API
 
 All binaries are stored in `.\bin\` next to the executable.
 
@@ -64,6 +65,7 @@ bin\
     yt-dlp.exe
     ffmpeg.exe
     ffprobe.exe
+    deno.exe
 MultiDL-Downloads\
     *.mp4 / *.mp3
     _watch_live.mp4
