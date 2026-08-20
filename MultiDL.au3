@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Add_Includes=n
+#AutoIt3Wrapper_Res_Fileversion=7.1.0.3
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
 #AutoIt3Wrapper_Run_Tidy=y
 #AutoIt3Wrapper_Run_Au3Stripper=y
@@ -26,6 +26,7 @@ Global Const $BIN_DIR = @ScriptDir & "\bin"
 Global Const $DL_DIR = @ScriptDir & "\MultiDL-Downloads"
 Global Const $YTDLP_EXE = $BIN_DIR & "\yt-dlp.exe"
 Global Const $FFMPEG_EXE = $BIN_DIR & "\ffmpeg.exe"
+Global Const $DENO_EXE = $BIN_DIR & "\deno.exe"
 Global Const $CLR_BG = 0x0F0F0F
 Global Const $CLR_PANEL = 0x1A1A1A
 Global Const $CLR_ACCENT = 0xFF0000
@@ -33,7 +34,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "7.1.0.2"
+Global Const $APP_VERSION = "7.1.0.3"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -634,6 +635,12 @@ Func _CleanURL($sURL)
 	Return $sURL
 EndFunc   ;==>_CleanURL
 
+; Gibt den --js-runtimes Parameter zurueck falls deno.exe vorhanden ist, sonst leer
+Func _JsRuntimeArg()
+	If FileExists($DENO_EXE) Then Return ' --js-runtimes deno:"' & $DENO_EXE & '"'
+	Return ""
+EndFunc   ;==>_JsRuntimeArg
+
 ; ============================================================
 ;  Live-View: yt-dlp starten, Datei oeffnen
 ; ============================================================
@@ -656,7 +663,7 @@ Func _StartLive($sURL, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 	GUICtrlSetBkColor($hLiveBtnStart, 0x444444)
 
 	; HIER WAR DER FEHLER: ffmpeg-location gefehlt + extractor-args hinzugefuegt gegen 403
-	Local $sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '" --no-playlist --no-part --extractor-args "youtube:player_client=android,web" -f "best[ext=mp4]/best" --newline -o "' & $DL_DIR & '\_watch_live.mp4" "' & $sURL & '"'
+	Local $sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '" --no-playlist --no-part --extractor-args "youtube:player_client=android,web"' & _JsRuntimeArg() & ' -f "best[ext=mp4]/best" --newline -o "' & $DL_DIR & '\_watch_live.mp4" "' & $sURL & '"'
 
 	FileDelete($DL_DIR & "\_watch_live.mp4")
 	If $bShowCMD Then Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
@@ -764,10 +771,10 @@ Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
 			Return
 		EndIf
 		_SetStatus($hStatusLabel, "MP3 Download started ...", 0x4FC3F7)
-		$sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '"' & $sPlFlag & ' -x --audio-format mp3 --audio-quality 0 --newline -o "' & $DL_DIR & '\%(title)s.%(ext)s" "' & $sURL & '"'
+		$sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '" --no-part --extractor-args "youtube:player_client=android,web"' & _JsRuntimeArg() & $sPlFlag & ' -x --audio-format mp3 --audio-quality 0 --newline -o "' & $DL_DIR & '\%(title)s.%(ext)s" "' & $sURL & '"'
 	Else
 		_SetStatus($hStatusLabel, "Video Download started ...", 0x4FC3F7)
-		$sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '"' & $sPlFlag & ' -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 --newline -o "' & $DL_DIR & '\%(title)s.%(ext)s" "' & $sURL & '"'
+		$sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '" --no-part --extractor-args "youtube:player_client=android,web"' & _JsRuntimeArg() & $sPlFlag & ' -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 --newline -o "' & $DL_DIR & '\%(title)s.%(ext)s" "' & $sURL & '"'
 	EndIf
 
 	If $bShowCMD Then Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
@@ -974,7 +981,8 @@ Func _StartupCheck()
 	If Not FileExists($DL_DIR) Then DirCreate($DL_DIR)
 	Local $bNeedYtdlp = Not FileExists($YTDLP_EXE)
 	Local $bNeedFfmpeg = Not FileExists($FFMPEG_EXE)
-	If Not $bNeedYtdlp And Not $bNeedFfmpeg Then Return
+	Local $bNeedDeno = Not FileExists($DENO_EXE)
+	If Not $bNeedYtdlp And Not $bNeedFfmpeg And Not $bNeedDeno Then Return
 
 	Local $hProg = GUICreate("preInstallation...", 420, 110, -1, -1, $WS_POPUP + $WS_BORDER)
 	GUISetBkColor(0x0F0F0F, $hProg)
@@ -1068,6 +1076,34 @@ Func _StartupCheck()
 			MsgBox(16, $APP_TITLE, "Error: ffmpeg.exe could not be unpacked." & @CRLF & $g_sUnzipDebug)
 			Return
 		EndIf
+	EndIf
+
+	If $bNeedDeno Then
+		; JS-Runtime fuer yt-dlp - YouTube verlangt inzwischen JS-Ausfuehrung
+		; zum Entschluesseln der Video-Signatur, ohne das gibt's 403 Forbidden
+		GUICtrlSetData($hProgInfo, "Downloading deno.exe (JS runtime for YouTube)...")
+		_ProgBar($hProgBar, 92)
+		Local $sDenoZip = $BIN_DIR & "\deno_tmp.zip"
+		Local $sDenoURL = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip"
+		If _Download($sDenoURL, $sDenoZip, $hProgBar, 92, 98) Then
+			GUICtrlSetData($hProgInfo, "Unpacking deno.exe...")
+			If _IsWine() Then
+				If FileExists($BIN_DIR & "\7za.exe") Then
+					RunWait('"' & $BIN_DIR & '\7za.exe" x "' & $sDenoZip & '" -o"' & $BIN_DIR & '" -y', $BIN_DIR, @SW_HIDE)
+				EndIf
+			Else
+				If Not _UnZipPS($sDenoZip, $BIN_DIR) Then _UnZip($sDenoZip, $BIN_DIR)
+			EndIf
+			FileDelete($sDenoZip)
+			If Not FileExists($DENO_EXE) Then
+				; deno.exe landete evtl. in einem Unterordner - nachsuchen
+				Local $sFound = _FindFileRecursive($BIN_DIR, "deno.exe")
+				If $sFound <> "" And $sFound <> $DENO_EXE Then FileMove($sFound, $DENO_EXE)
+			EndIf
+		EndIf
+		; nicht fatal falls deno fehlschlaegt - yt-dlp laeuft dann halt ohne
+		; JS-Runtime weiter (mit dem bekannten 403-Risiko)
+		_ProgBar($hProgBar, 98)
 	EndIf
 
 	GUICtrlSetData($hProgInfo, "Done! Everything is ready.")
