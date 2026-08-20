@@ -1,5 +1,4 @@
-# BrAiNee's MultiDL v7 (19.08.2026)
-Youtube DL still buggy (needs fix)
+# BrAiNee's MultiDL v7 (20.08.2026)
 
 A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ffmpeg** — built in AutoIt, with full **Wine on Linux** compatibility.
 
