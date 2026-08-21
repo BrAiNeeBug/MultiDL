@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=7.1.0.6
+#AutoIt3Wrapper_Res_Fileversion=7.1.0.7
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
 #AutoIt3Wrapper_Run_Tidy=y
 #AutoIt3Wrapper_Run_Au3Stripper=y
@@ -35,7 +35,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "7.1.0.6"
+Global Const $APP_VERSION = "7.1.0.7"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -688,10 +688,29 @@ EndFunc   ;==>_DLErrorStatus
 Func _PlayFile($sFile)
 	If _IsWine() And FileExists($FFPLAY_EXE) Then
 		Run('"' & $FFPLAY_EXE & '" -window_title "MultiDL" -loglevel error "' & $sFile & '"')
+		_HideWineConsole()
 	Else
 		ShellExecute($sFile)
 	EndIf
 EndFunc   ;==>_PlayFile
+
+; ============================================================
+;  Wine haengt an jeden gestarteten Konsolen-Prozess (ffplay.exe
+;  ist ein Konsolen-Subsystem-Build) automatisch ein sichtbares
+;  "cmd"-Fenster (Wine-Konsole) mit an. Das laesst sich nicht
+;  verhindern - und schliesst man dieses Fenster, haengt ffplay
+;  am selben Konsolen-Handle und stirbt gleich mit. Deshalb hier
+;  NICHT schliessen, sondern nur verstecken. Das Fenster taucht
+;  quasi sofort nach dem Run() auf, kurzer WinWait reicht.
+;  Die Video-Ausgabe von ffplay laeuft ueber ein eigenes SDL-
+;  Fenster mit Titel "MultiDL" (siehe -window_title oben) und
+;  ist von diesem Konsolen-Fenster komplett getrennt - die wird
+;  hier also nicht mitversteckt.
+; ============================================================
+Func _HideWineConsole()
+	Local $hConsole = WinWait("[REGEXPTITLE:(?i).*ffplay\.exe.*]", "", 3)
+	If $hConsole <> 0 Then WinSetState($hConsole, "", @SW_HIDE)
+EndFunc   ;==>_HideWineConsole
 
 ; ============================================================
 ;  Live-View: yt-dlp starten, Datei oeffnen
