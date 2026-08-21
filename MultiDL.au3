@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=7.1.0.4
+#AutoIt3Wrapper_Res_Fileversion=7.1.0.5
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
 #AutoIt3Wrapper_Run_Tidy=y
 #AutoIt3Wrapper_Run_Au3Stripper=y
@@ -34,7 +34,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "7.1.0.4"
+Global Const $APP_VERSION = "7.1.0.5"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -53,6 +53,8 @@ Global $sDLError = ""
 ; ---- Zuletzt heruntergeladene Datei (fuer Play-Button) ----
 Global $sLastFile = ""
 Global $bPlayerOpened = False
+; ---- Zeitpunkt an dem der Live-Download gestartet wurde (fuer Player-Grace-Period) ----
+Global $g_iLiveStartTick = 0
 
 ; ---- Startup Check ----
 _StartupCheck()
@@ -671,6 +673,7 @@ Func _StartLive($sURL, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 	$bDLFailed = False
 	$sDLError = ""
 	$hDLProc = Run($sCMD, $DL_DIR, @SW_HIDE, 6)
+	$g_iLiveStartTick = TimerInit()
 EndFunc   ;==>_StartLive
 ; ============================================================
 ;  Live-Fortschritt lesen
@@ -692,10 +695,15 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 		Return
 	EndIf
 
-	; Player einmalig oeffnen sobald Datei da ist
+	; Player einmalig oeffnen sobald Datei da ist.
+	; WICHTIG: NICHT auf FileGetSize()>0 warten! Bei Live-Streams bleibt die
+	; gemeldete Groesse teils lange bei 0 (Buffer wird von yt-dlp/ffmpeg noch
+	; nicht geflusht), obwohl die Datei manuell in VLC schon problemlos laeuft.
+	; Daher reicht Existenz der Datei + kurze Mindestwartezeit seit Prozessstart,
+	; damit yt-dlp ueberhaupt Zeit hatte die Datei anzulegen.
 	If Not $bPlayerOpened Then
 		Local $sOutFile = $DL_DIR & "\_watch_live.mp4"
-		If FileExists($sOutFile) And FileGetSize($sOutFile) > 0 Then
+		If FileExists($sOutFile) And TimerDiff($g_iLiveStartTick) > 2000 Then
 			ShellExecute($sOutFile)
 			$bPlayerOpened = True
 		EndIf
