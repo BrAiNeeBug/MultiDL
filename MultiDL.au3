@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=7.1.0.5
+#AutoIt3Wrapper_Res_Fileversion=7.1.0.6
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
 #AutoIt3Wrapper_Run_Tidy=y
 #AutoIt3Wrapper_Run_Au3Stripper=y
@@ -27,6 +27,7 @@ Global Const $DL_DIR = @ScriptDir & "\MultiDL-Downloads"
 Global Const $YTDLP_EXE = $BIN_DIR & "\yt-dlp.exe"
 Global Const $FFMPEG_EXE = $BIN_DIR & "\ffmpeg.exe"
 Global Const $DENO_EXE = $BIN_DIR & "\deno.exe"
+Global Const $FFPLAY_EXE = $BIN_DIR & "\ffplay.exe"
 Global Const $CLR_BG = 0x0F0F0F
 Global Const $CLR_PANEL = 0x1A1A1A
 Global Const $CLR_ACCENT = 0xFF0000
@@ -34,7 +35,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "7.1.0.5"
+Global Const $APP_VERSION = "7.1.0.6"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -50,6 +51,11 @@ Global $hDLProc = 0
 ; ---- Download-Fehler erkannt ----
 Global $bDLFailed = False
 Global $sDLError = ""
+; ---- yt-dlp Bot-Check: einmaliger Retry mit --force-ipv4 ----
+Global $g_bIPv4Retried = False
+Global $g_bBotBlock = False
+Global $g_sDownloadCMD = ""
+Global $g_sLiveCMD = ""
 ; ---- Zuletzt heruntergeladene Datei (fuer Play-Button) ----
 Global $sLastFile = ""
 Global $bPlayerOpened = False
@@ -549,7 +555,7 @@ While 1
 			; Datei abspielen
 		Case $iMsg = $hBtnPlay
 			If $sLastFile <> "" And FileExists($sLastFile) Then
-				ShellExecute($sLastFile)
+				_PlayFile($sLastFile)
 			ElseIf $sLastFile <> "" Then
 				_SetStatus($hStatus, "File not found: " & $sLastFile, 0xFF5252)
 			Else
@@ -644,6 +650,50 @@ Func _JsRuntimeArg()
 EndFunc   ;==>_JsRuntimeArg
 
 ; ============================================================
+;  Erkennt YouTubes "Sign in to confirm you're not a bot"-Sperre.
+;  Das ist kein normaler Download-Fehler sondern eine IP-basierte
+;  Bot-Sperre - hilft nur Router neustarten (neue IP vom Provider)
+;  oder eine Weile warten, kein Retry oder Cookie-Frickelei noetig.
+; ============================================================
+Func _IsBotBlockLine($s)
+	Return (StringInStr($s, "not a bot", 0, 1) > 0) _
+			Or (StringInStr($s, "Sign in to confirm", 0, 1) > 0) _
+			Or (StringInStr($s, "confirm you're not a bot", 0, 1) > 0) _
+			Or (StringInStr($s, "confirm you are not a bot", 0, 1) > 0)
+EndFunc   ;==>_IsBotBlockLine
+
+; Fuegt den IPv4-Fallback genau einmal zu einem bestehenden yt-dlp-Aufruf hinzu.
+Func _ForceIPv4CMD($sCMD)
+	If StringInStr($sCMD, " --force-ipv4", 0, 1) > 0 Then Return $sCMD
+	Return StringReplace($sCMD, " --newline", " --force-ipv4 --newline", 1, 1)
+EndFunc   ;==>_ForceIPv4CMD
+
+Func _DLErrorLabel($sRaw)
+	If _IsBotBlockLine($sRaw) Then Return "YouTube blocked you (bot-check)! Restart your router for a new IP."
+	Return StringLeft($sRaw, 75)
+EndFunc   ;==>_DLErrorLabel
+
+Func _DLErrorStatus($sRaw)
+	If _IsBotBlockLine($sRaw) Then Return "BLOCKED by YouTube (bot-check)! Restart your router (new IP) and try again in a bit."
+	Return "ERROR! Download failed (try LIVE-Mode!)"
+EndFunc   ;==>_DLErrorStatus
+
+; ============================================================
+;  Datei mit dem passenden Player oeffnen.
+;  Unter Wine/Linux gibt's meist keine Datei-Assoziation fuer mp4,
+;  ShellExecute() laeuft dann ins Leere - deshalb dort ffplay
+;  nutzen (liegt eh schon neben ffmpeg.exe). Unter echtem Windows
+;  ganz normal der vom Nutzer registrierte Standardplayer.
+; ============================================================
+Func _PlayFile($sFile)
+	If _IsWine() And FileExists($FFPLAY_EXE) Then
+		Run('"' & $FFPLAY_EXE & '" -window_title "MultiDL" -loglevel error "' & $sFile & '"')
+	Else
+		ShellExecute($sFile)
+	EndIf
+EndFunc   ;==>_PlayFile
+
+; ============================================================
 ;  Live-View: yt-dlp starten, Datei oeffnen
 ; ============================================================
 Func _StartLive($sURL, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
@@ -666,6 +716,9 @@ Func _StartLive($sURL, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 
 	; HIER WAR DER FEHLER: ffmpeg-location gefehlt + extractor-args hinzugefuegt gegen 403
 	Local $sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '" --no-playlist --no-part --extractor-args "youtube:player_client=android,web"' & _JsRuntimeArg() & ' -f "best[ext=mp4]/best" --newline -o "' & $DL_DIR & '\_watch_live.mp4" "' & $sURL & '"'
+	$g_sLiveCMD = $sCMD
+	$g_bIPv4Retried = False
+	$g_bBotBlock = False
 
 	FileDelete($DL_DIR & "\_watch_live.mp4")
 	If $bShowCMD Then Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
@@ -681,63 +734,122 @@ EndFunc   ;==>_StartLive
 Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
 	Static Local $iPulse = 0, $iPulseDir = 1
 
-	Local $sLine = StdoutRead($hDLProc)
-	If @error Then
-		$hDLProc = 0
-		$bPlayerOpened = False
-		$iPulse = 0
-		$iPulseDir = 1
-		GUICtrlSetPos($hLiveProgBar, 24, 290, 512, 10)
-		GUICtrlSetData($hLiveProgLabel, "Done.")
-		GUICtrlSetData($hLiveProgSize, "")
-		GUICtrlSetData($hLiveBtnStart, "Start Live")
-		GUICtrlSetBkColor($hLiveBtnStart, 0x880000)
-		Return
+	; yt-dlp kann Fehler auf STDERR ausgeben. Bei Run(..., 6) lesen wir deshalb
+	; beide Pipes. Wichtig: @error bei StdoutRead ist KEIN Erfolgs-Signal.
+	Local $sStdout = StdoutRead($hDLProc)
+	Local $sStderr = StderrRead($hDLProc)
+
+	; Beide Ausgaben gemeinsam verarbeiten.
+	Local $sAllOutput = $sStdout & @LF & $sStderr
+	If $sAllOutput <> @LF Then
+		Local $aLines = StringSplit($sAllOutput, @LF, 1)
+		For $i = 1 To $aLines[0]
+			Local $sTrimmed = StringStripWS($aLines[$i], 3)
+			If StringLen($sTrimmed) < 4 Then ContinueLoop
+
+			; YouTube Bot-Login erkannt: nicht sofort als Fehler anzeigen.
+			; Der Prozess darf sauber beenden und wird danach genau einmal
+			; mit --force-ipv4 neu gestartet.
+			If _IsBotBlockLine($sTrimmed) Then
+				$g_bBotBlock = True
+				$bDLFailed = True
+				$sDLError = $sTrimmed
+				ContinueLoop
+			EndIf
+
+			; Groesse aus [download]-Zeile
+			Local $aSize = StringRegExp($sTrimmed, "\[download\]\s+([\d\.]+\s*(?:KiB|MiB|GiB))", 1)
+			If Not @error And UBound($aSize) >= 1 Then
+				GUICtrlSetData($hLiveProgSize, $aSize[0])
+				Local $sShort = StringRegExpReplace($sTrimmed, "^\[download\]\s+", "")
+				If StringLen($sShort) > 65 Then $sShort = StringLeft($sShort, 65) & "..."
+				GUICtrlSetData($hLiveProgLabel, $sShort)
+				$iPulse += $iPulseDir * 24
+				If $iPulse >= 480 Then $iPulseDir = -1
+				If $iPulse <= 0 Then $iPulseDir = 1
+				GUICtrlSetPos($hLiveProgBar, 24, 290, $iPulse, 10)
+				ContinueLoop
+			EndIf
+
+			If StringInStr($sTrimmed, "ERROR", 0, 1) > 0 _
+					Or StringInStr($sTrimmed, "403 Forbidden", 0, 1) > 0 _
+					Or StringInStr($sTrimmed, "HTTP Error 403", 0, 1) > 0 Then
+				$bDLFailed = True
+				$sDLError = $sTrimmed
+			EndIf
+		Next
 	EndIf
 
 	; Player einmalig oeffnen sobald Datei da ist.
-	; WICHTIG: NICHT auf FileGetSize()>0 warten! Bei Live-Streams bleibt die
-	; gemeldete Groesse teils lange bei 0 (Buffer wird von yt-dlp/ffmpeg noch
-	; nicht geflusht), obwohl die Datei manuell in VLC schon problemlos laeuft.
-	; Daher reicht Existenz der Datei + kurze Mindestwartezeit seit Prozessstart,
-	; damit yt-dlp ueberhaupt Zeit hatte die Datei anzulegen.
 	If Not $bPlayerOpened Then
 		Local $sOutFile = $DL_DIR & "\_watch_live.mp4"
 		If FileExists($sOutFile) And TimerDiff($g_iLiveStartTick) > 2000 Then
-			ShellExecute($sOutFile)
+			_PlayFile($sOutFile)
 			$bPlayerOpened = True
 		EndIf
 	EndIf
 
-	If $sLine = "" Then Return
+	; Prozess laeuft noch, also weiterwarten.
+	If ProcessExists($hDLProc) Then Return
 
-	Local $aLines = StringSplit($sLine, @LF, 1)
-	For $i = 1 To $aLines[0]
-		Local $sTrimmed = StringStripWS($aLines[$i], 3)
-		If StringLen($sTrimmed) < 4 Then ContinueLoop
+	; ------------------------------------------------------------
+	; Bot-Check: genau EIN Retry mit --force-ipv4.
+	; Erst wenn auch dieser Lauf wieder am Bot-Check scheitert,
+	; wird der Fehler endgueltig angezeigt.
+	; ------------------------------------------------------------
+	If $g_bBotBlock And Not $g_bIPv4Retried Then
+		$g_bIPv4Retried = True
+		$g_bBotBlock = False
+		$bDLFailed = False
+		$sDLError = ""
 
-		; Groesse aus [download]-Zeile
-		Local $aSize = StringRegExp($sTrimmed, "\[download\]\s+([\d\.]+\s*(?:KiB|MiB|GiB))", 1)
-		If Not @error And UBound($aSize) >= 1 Then
-			GUICtrlSetData($hLiveProgSize, $aSize[0])
-			Local $sShort = StringRegExpReplace($sTrimmed, "^\[download\]\s+", "")
-			If StringLen($sShort) > 65 Then $sShort = StringLeft($sShort, 65) & "..."
-			GUICtrlSetData($hLiveProgLabel, $sShort)
-			$iPulse += $iPulseDir * 24
-			If $iPulse >= 480 Then $iPulseDir = -1
-			If $iPulse <= 0 Then $iPulseDir = 1
-			GUICtrlSetPos($hLiveProgBar, 24, 290, $iPulse, 10)
-			ContinueLoop
+		FileDelete($DL_DIR & "\_watch_live.mp4")
+		$bPlayerOpened = False
+		$g_iLiveStartTick = TimerInit()
+		$iPulse = 0
+		$iPulseDir = 1
+
+		GUICtrlSetPos($hLiveProgBar, 24, 290, 0, 10)
+		GUICtrlSetBkColor($hLiveProgBar, 0x0088FF)
+		GUICtrlSetData($hLiveProgLabel, "Bot-check detected, retrying with IPv4...")
+		GUICtrlSetData($hLiveProgSize, "")
+		GUICtrlSetData($hLiveBtnStart, "Stop")
+		GUICtrlSetBkColor($hLiveBtnStart, 0x444444)
+
+		Local $sRetryCMD = _ForceIPv4CMD($g_sLiveCMD)
+		If $bShowCMD Then Run('cmd.exe /k "' & $sRetryCMD & '"', $DL_DIR, @SW_SHOW)
+		$hDLProc = Run($sRetryCMD, $DL_DIR, @SW_HIDE, 6)
+		Return
+	EndIf
+
+	; Zweiter Bot-Check oder anderer Live-Fehler: NICHT "Done." anzeigen.
+	If $bDLFailed Then
+		GUICtrlSetPos($hLiveProgBar, 24, 290, 512, 10)
+		GUICtrlSetBkColor($hLiveProgBar, 0xFF5252)
+		GUICtrlSetData($hLiveProgSize, "ERROR")
+		If $sDLError <> "" Then
+			GUICtrlSetData($hLiveProgLabel, _DLErrorLabel($sDLError))
+		Else
+			GUICtrlSetData($hLiveProgLabel, "ERROR! Live stream failed.")
 		EndIf
+		GUICtrlSetData($hLiveBtnStart, "Start Live")
+		GUICtrlSetBkColor($hLiveBtnStart, 0x880000)
+		$hDLProc = 0
+		$bDLFailed = False
+		$sDLError = ""
+		$g_bBotBlock = False
+		Return
+	EndIf
 
-		If StringInStr($sTrimmed, "ERROR") Then
-			GUICtrlSetData($hLiveProgLabel, StringLeft($sTrimmed, 65))
-			$hDLProc = 0
-			$bPlayerOpened = False
-			GUICtrlSetData($hLiveBtnStart, "Start Live")
-			GUICtrlSetBkColor($hLiveBtnStart, 0x880000)
-		EndIf
-	Next
+	; Prozess beendet sich ohne Fehler, z.B. weil der Live-Stream wirklich endet.
+	GUICtrlSetPos($hLiveProgBar, 24, 290, 512, 10)
+	GUICtrlSetBkColor($hLiveProgBar, 0x00AA44)
+	GUICtrlSetData($hLiveProgLabel, "Done.")
+	GUICtrlSetData($hLiveProgSize, "")
+	GUICtrlSetData($hLiveBtnStart, "Start Live")
+	GUICtrlSetBkColor($hLiveBtnStart, 0x880000)
+	$hDLProc = 0
+	$bPlayerOpened = False
 EndFunc   ;==>_ReadLiveProgress
 
 ; ============================================================
@@ -788,6 +900,9 @@ Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
 	If $bShowCMD Then Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
 	$bDLFailed = False
 	$sDLError = ""
+	$g_bIPv4Retried = False
+	$g_bBotBlock = False
+	$g_sDownloadCMD = $sCMD
 	$hDLProc = Run($sCMD, $DL_DIR, @SW_HIDE, 6) ; STDOUT + STDERR
 EndFunc   ;==>_StartDownload
 
@@ -805,15 +920,15 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		For $i = 1 To $aLines[0]
 			Local $sTrimmed = StringStripWS($aLines[$i], 3)
 			If StringLen($sTrimmed) > 3 Then
-				If StringInStr($sTrimmed, "ERROR") Or StringInStr($sTrimmed, "Error") _
-						Or StringInStr($sTrimmed, "403 Forbidden") _
-						Or StringInStr($sTrimmed, "HTTP Error 403") Then
+				If _IsBotBlockLine($sTrimmed) Then
+					$g_bBotBlock = True
 					$bDLFailed = True
 					$sDLError = $sTrimmed
-					GUICtrlSetBkColor($hProgBar, 0xFF5252)
-					GUICtrlSetData($hProgPct, "ERROR")
-					GUICtrlSetData($hProgLabel, StringLeft($sTrimmed, 75))
-					_SetStatus($hStatus, "ERROR! Download failed (try LIVE-Mode!)", 0xFF5252)
+				ElseIf StringInStr($sTrimmed, "ERROR", 0, 1) > 0 _
+						Or StringInStr($sTrimmed, "403 Forbidden", 0, 1) > 0 _
+						Or StringInStr($sTrimmed, "HTTP Error 403", 0, 1) > 0 Then
+					$bDLFailed = True
+					$sDLError = $sTrimmed
 				Else
 					_ParseProgressLine($sTrimmed, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 				EndIf
@@ -821,45 +936,74 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		Next
 	EndIf
 
-	; Parse STDERR too. This is where yt-dlp normally prints:
-	; ERROR: unable to download video data: HTTP Error 403: Forbidden
+	; Parse STDERR too. This is where yt-dlp normally prints errors.
 	If $sStderr <> "" Then
 		Local $aErrLines = StringSplit($sStderr, @LF, 1)
 		For $i = 1 To $aErrLines[0]
 			Local $sErrTrimmed = StringStripWS($aErrLines[$i], 3)
 			If StringLen($sErrTrimmed) > 3 Then
-				If StringInStr($sErrTrimmed, "ERROR") Or StringInStr($sErrTrimmed, "Error") _
-						Or StringInStr($sErrTrimmed, "403 Forbidden") _
-						Or StringInStr($sErrTrimmed, "HTTP Error 403") Then
+				If _IsBotBlockLine($sErrTrimmed) Then
+					$g_bBotBlock = True
 					$bDLFailed = True
 					$sDLError = $sErrTrimmed
-					GUICtrlSetBkColor($hProgBar, 0xFF5252)
-					GUICtrlSetData($hProgPct, "ERROR")
-					GUICtrlSetData($hProgLabel, StringLeft($sErrTrimmed, 75))
-					_SetStatus($hStatus, "ERROR! Download failed (try LIVE-Mode!)", 0xFF5252)
+				ElseIf StringInStr($sErrTrimmed, "ERROR", 0, 1) > 0 _
+						Or StringInStr($sErrTrimmed, "403 Forbidden", 0, 1) > 0 _
+						Or StringInStr($sErrTrimmed, "HTTP Error 403", 0, 1) > 0 Then
+					$bDLFailed = True
+					$sDLError = $sErrTrimmed
 				EndIf
 			EndIf
 		Next
 	EndIf
 
-	; Do NOT use StdoutRead(@error) as a success signal.
-	; A download is successful only after the process has actually exited
-	; and no yt-dlp error was received.
-	If ProcessExists($hDLProc) Then Return
+	; Prozess laeuft noch, also weiterwarten.
+	If ProcessExists($hDLProc) Then
+		If $g_bBotBlock Then
+			GUICtrlSetData($hProgPct, "RETRY")
+			GUICtrlSetData($hProgLabel, "YouTube bot-check detected, waiting for IPv4 retry...")
+			_SetStatus($hStatus, "Bot-check detected. Retrying once with IPv4...", 0xFFAA00)
+		EndIf
+		Return
+	EndIf
 
+	; ------------------------------------------------------------
+	; Bot-Check: genau EIN Retry mit --force-ipv4.
+	; Erst wenn auch dieser Lauf wieder am Bot-Check scheitert,
+	; wird der Fehler endgueltig angezeigt.
+	; ------------------------------------------------------------
+	If $g_bBotBlock And Not $g_bIPv4Retried Then
+		$g_bIPv4Retried = True
+		$g_bBotBlock = False
+		$bDLFailed = False
+		$sDLError = ""
+
+		GUICtrlSetPos($hProgBar, 24, 364, 0, 12)
+		GUICtrlSetBkColor($hProgBar, $CLR_ACCENT)
+		GUICtrlSetData($hProgPct, "RETRY")
+		GUICtrlSetData($hProgLabel, "Bot-check detected, retrying with IPv4...")
+		_SetStatus($hStatus, "YouTube bot-check detected. Retrying with --force-ipv4...", 0xFFAA00)
+
+		Local $sRetryCMD = _ForceIPv4CMD($g_sDownloadCMD)
+		If $bShowCMD Then Run('cmd.exe /k "' & $sRetryCMD & '"', $DL_DIR, @SW_SHOW)
+		$hDLProc = Run($sRetryCMD, $DL_DIR, @SW_HIDE, 6)
+		Return
+	EndIf
+
+	; Endgueltiger Fehler, inklusive zweitem Bot-Check.
 	If $bDLFailed Then
 		GUICtrlSetPos($hProgBar, 24, 364, 512, 12)
 		GUICtrlSetBkColor($hProgBar, 0xFF5252)
 		GUICtrlSetData($hProgPct, "ERROR")
 		If $sDLError <> "" Then
-			GUICtrlSetData($hProgLabel, StringLeft($sDLError, 75))
+			GUICtrlSetData($hProgLabel, _DLErrorLabel($sDLError))
 		Else
 			GUICtrlSetData($hProgLabel, "Download failed.")
 		EndIf
-		_SetStatus($hStatus, "ERROR! Download failed (try LIVE-Mode!)", 0xFF5252)
+		_SetStatus($hStatus, _DLErrorStatus($sDLError), 0xFF5252)
 		$hDLProc = 0
 		$bDLFailed = False
 		$sDLError = ""
+		$g_bBotBlock = False
 		GUICtrlSetData($hBtnDownload, "Start")
 		GUICtrlSetBkColor($hBtnDownload, 0x00AA44)
 		Return
@@ -967,12 +1111,12 @@ Func _ParseProgressLine($sLine, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		$sDLError = $sLine
 
 		GUICtrlSetBkColor($hProgBar, 0xFF5252)
-		If StringLen($sLine) > 65 Then
-			GUICtrlSetData($hProgLabel, StringLeft($sLine, 65) & "...")
+		GUICtrlSetData($hProgLabel, _DLErrorLabel($sLine))
+		If _IsBotBlockLine($sLine) Then
+			_SetStatus($hStatus, _DLErrorStatus($sLine), 0xFF5252)
 		Else
-			GUICtrlSetData($hProgLabel, $sLine)
+			_SetStatus($hStatus, "ERROR! Download failed. Look CMD-Window for Details.", 0xFF5252)
 		EndIf
-		_SetStatus($hStatus, "ERROR! Download failed. Look CMD-Window for Details.", 0xFF5252)
 		; WICHTIG: $hDLProc bleibt gueltig, bis _ReadProgress den
 		; Prozess wirklich beendet/den Stream nicht mehr lesen kann.
 		; Sonst wird der naechste @error faelschlich als DONE behandelt.
