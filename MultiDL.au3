@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=7.1.0.7
+#AutoIt3Wrapper_Res_Fileversion=7.1.0.8
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
 #AutoIt3Wrapper_Run_Tidy=y
 #AutoIt3Wrapper_Run_Au3Stripper=y
@@ -35,7 +35,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "7.1.0.7"
+Global Const $APP_VERSION = "7.1.0.8"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -62,7 +62,8 @@ Global $bPlayerOpened = False
 ; ---- Zeitpunkt an dem der Live-Download gestartet wurde (fuer Player-Grace-Period) ----
 Global $g_iLiveStartTick = 0
 
-; ---- Startup Check ----
+; ---- Verwaiste Prozesse von einem Absturz aufraeumen, dann Startup Check ----
+_KillStaleProcesses()
 _StartupCheck()
 
 ; ---- GUI aufbauen ----
@@ -668,13 +669,30 @@ Func _ForceIPv4CMD($sCMD)
 	Return StringReplace($sCMD, " --newline", " --force-ipv4 --newline", 1, 1)
 EndFunc   ;==>_ForceIPv4CMD
 
+; ============================================================
+;  Erkennt HTTP 416 ("Requested Range Not Satisfiable"). Passiert
+;  vor allem wenn noch alte yt-dlp/ffmpeg-Prozesse (z.B. nach einem
+;  Absturz) im Hintergrund haengen und gleichzeitig auf dieselbe
+;  YouTube-Session/Range zugreifen - YouTube blockt dann teilweise
+;  mit 416. Hilft nur: die haengenden Prozesse weg (siehe
+;  _KillStaleProcesses) und/oder eine neue IP (Router-Reboot).
+; ============================================================
+Func _Is416Line($s)
+	Return StringInStr($s, "416", 0, 1) > 0 _
+			And (StringInStr($s, "Requested range", 0, 1) > 0 _
+			Or StringInStr($s, "Range Not Satisfiable", 0, 1) > 0 _
+			Or StringInStr($s, "HTTP Error 416", 0, 1) > 0)
+EndFunc   ;==>_Is416Line
+
 Func _DLErrorLabel($sRaw)
 	If _IsBotBlockLine($sRaw) Then Return "YouTube blocked you (bot-check)! Restart your router for a new IP."
+	If _Is416Line($sRaw) Then Return "ERROR 416 - too much still open! Reboot PC/router, then retry."
 	Return StringLeft($sRaw, 75)
 EndFunc   ;==>_DLErrorLabel
 
 Func _DLErrorStatus($sRaw)
 	If _IsBotBlockLine($sRaw) Then Return "BLOCKED by YouTube (bot-check)! Restart your router (new IP) and try again in a bit."
+	If _Is416Line($sRaw) Then Return "ERROR 416! Leftover connections/processes are blocking this. Reboot your PC (or router) and try again."
 	Return "ERROR! Download failed (try LIVE-Mode!)"
 EndFunc   ;==>_DLErrorStatus
 
@@ -792,7 +810,8 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 
 			If StringInStr($sTrimmed, "ERROR", 0, 1) > 0 _
 					Or StringInStr($sTrimmed, "403 Forbidden", 0, 1) > 0 _
-					Or StringInStr($sTrimmed, "HTTP Error 403", 0, 1) > 0 Then
+					Or StringInStr($sTrimmed, "HTTP Error 403", 0, 1) > 0 _
+					Or StringInStr($sTrimmed, "HTTP Error 416", 0, 1) > 0 Then
 				$bDLFailed = True
 				$sDLError = $sTrimmed
 			EndIf
@@ -843,6 +862,8 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 
 	; Zweiter Bot-Check oder anderer Live-Fehler: NICHT "Done." anzeigen.
 	If $bDLFailed Then
+		; Bei 416 nochmal Leichencheck - vielleicht haengt gerade neu was rum.
+		If _Is416Line($sDLError) Then _KillStaleProcesses()
 		GUICtrlSetPos($hLiveProgBar, 24, 290, 512, 10)
 		GUICtrlSetBkColor($hLiveProgBar, 0xFF5252)
 		GUICtrlSetData($hLiveProgSize, "ERROR")
@@ -945,7 +966,8 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 					$sDLError = $sTrimmed
 				ElseIf StringInStr($sTrimmed, "ERROR", 0, 1) > 0 _
 						Or StringInStr($sTrimmed, "403 Forbidden", 0, 1) > 0 _
-						Or StringInStr($sTrimmed, "HTTP Error 403", 0, 1) > 0 Then
+						Or StringInStr($sTrimmed, "HTTP Error 403", 0, 1) > 0 _
+						Or StringInStr($sTrimmed, "HTTP Error 416", 0, 1) > 0 Then
 					$bDLFailed = True
 					$sDLError = $sTrimmed
 				Else
@@ -967,7 +989,8 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 					$sDLError = $sErrTrimmed
 				ElseIf StringInStr($sErrTrimmed, "ERROR", 0, 1) > 0 _
 						Or StringInStr($sErrTrimmed, "403 Forbidden", 0, 1) > 0 _
-						Or StringInStr($sErrTrimmed, "HTTP Error 403", 0, 1) > 0 Then
+						Or StringInStr($sErrTrimmed, "HTTP Error 403", 0, 1) > 0 _
+						Or StringInStr($sErrTrimmed, "HTTP Error 416", 0, 1) > 0 Then
 					$bDLFailed = True
 					$sDLError = $sErrTrimmed
 				EndIf
@@ -1010,6 +1033,8 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 
 	; Endgueltiger Fehler, inklusive zweitem Bot-Check.
 	If $bDLFailed Then
+		; Bei 416 nochmal Leichencheck - vielleicht haengt gerade neu was rum.
+		If _Is416Line($sDLError) Then _KillStaleProcesses()
 		GUICtrlSetPos($hProgBar, 24, 364, 512, 12)
 		GUICtrlSetBkColor($hProgBar, 0xFF5252)
 		GUICtrlSetData($hProgPct, "ERROR")
@@ -1143,6 +1168,26 @@ Func _ParseProgressLine($sLine, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 	EndIf
 EndFunc   ;==>_ParseProgressLine
 
+
+; ============================================================
+;  Wenn MultiDL vorher abgestuerzt ist (z.B. waehrend des Codens
+;  im IDE beendet), koennen yt-dlp.exe/ffmpeg.exe von diesem Lauf
+;  noch als Prozessleichen weiterlaufen - der naechste Start haut
+;  dann u.a. mit HTTP 416 (Range Not Satisfiable) hin, weil yt-dlp
+;  versucht eine halbfertige/blockierte Datei weiterzuladen deren
+;  Zustand nicht mehr passt. Deshalb VOR allem anderen: alte
+;  yt-dlp.exe/ffmpeg.exe Prozesse killen, damit nichts haengen
+;  bleibt. ffplay.exe wird bewusst NICHT angefasst - falls da noch
+;  ein Video vom letzten Lauf laeuft, soll das weiterlaufen duerfen.
+; ============================================================
+Func _KillStaleProcesses()
+	Local $oProcs = ProcessList()
+	For $p = 1 To $oProcs[0][0]
+		If StringInStr($oProcs[$p][0], "yt-dlp") Or StringInStr($oProcs[$p][0], "ffmpeg") Then
+			ProcessClose($oProcs[$p][1])
+		EndIf
+	Next
+EndFunc   ;==>_KillStaleProcesses
 
 ; ============================================================
 ;  Startup Check: yt-dlp.exe und ffmpeg.exe pruefen & laden
