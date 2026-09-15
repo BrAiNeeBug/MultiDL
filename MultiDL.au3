@@ -21,7 +21,7 @@
 #include <InetConstants.au3>
 
 ; ---- Konstanten ----
-Global Const $APP_TITLE = "BrAiNee's MultiDL v7"
+Global Const $APP_TITLE = "BrAiNee's MultiDL v8"
 Global Const $BIN_DIR = @ScriptDir & "\bin"
 Global Const $DL_DIR = @ScriptDir & "\MultiDL-Downloads"
 Global Const $YTDLP_EXE = $BIN_DIR & "\yt-dlp.exe"
@@ -34,8 +34,9 @@ Global Const $CLR_ACCENT = 0xFF0000
 Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
+
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "7.1.0.8"
+Global Const $APP_VERSION = "8.0.0.1"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -736,6 +737,8 @@ EndFunc   ;==>_HideWineConsole
 Func _StartLive($sURL, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
 	If $hDLProc <> 0 Then Return
 	$sURL = StringStripWS($sURL, 3)
+	If _IsSunoURL($sURL) Then $sURL = _SunoRewriteURL($sURL)     ; <-- NEU
+
 	If Not StringRegExp($sURL, "(?i)^https?://") Then
 		GUICtrlSetData($hLiveProgLabel, "Bad URL.")
 		Return
@@ -896,6 +899,8 @@ EndFunc   ;==>_ReadLiveProgress
 ;  yt-dlp starten (Video oder MP3)
 ; ============================================================
 Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
+	If _IsSunoURL($sURL) Then $sURL = _SunoRewriteURL($sURL)     ; <-- NEU
+
 	If Not FileExists($YTDLP_EXE) Then
 		MsgBox(16, $APP_TITLE, "yt-dlp.exe not found!" & @CRLF & "needed in: " & $YTDLP_EXE)
 		_SetStatus($hStatusLabel, "yt-dlp.exe not found!", 0xFF5252)
@@ -1708,3 +1713,33 @@ Func _Get7zrURL()
 	Local $sVer = StringReplace($sTag, ".", "")
 	Return "https://github.com/ip7z/7zip/releases/download/" & $sTag & "/7zr.exe"
 EndFunc   ;==>_Get7zrURL
+
+; ------------------------------------------------------------
+;  True for any suno.com/suno.ai link that isn't already
+;  a direct cdn url.
+; ------------------------------------------------------------
+Func _IsSunoURL($sURL)
+	Return StringRegExp($sURL, "(?i)^https?://(www\.)?suno\.(com|ai)/")
+EndFunc   ;==>_IsSunoURL
+
+; ------------------------------------------------------------
+;  Pull the clip uuid out of a suno.com/song/<uuid> (or any
+;  other suno url shape that carries the uuid directly).
+; ------------------------------------------------------------
+Func _SunoClipId($sURL)
+	Local $aM = StringRegExp($sURL, "(?i)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", 1)
+	If IsArray($aM) Then Return $aM[0]
+	Return ""
+EndFunc   ;==>_SunoClipId
+
+; ------------------------------------------------------------
+;  suno.com/song/<uuid>  ->  https://cdn1.suno.ai/<uuid>.mp4
+;  Returns the original url unchanged if no id is found (e.g.
+;  a suno.com/s/<short> share link - those need resolving first,
+;  not handled here).
+; ------------------------------------------------------------
+Func _SunoRewriteURL($sURL)
+	Local $sId = _SunoClipId($sURL)
+	If $sId = "" Then Return $sURL
+	Return "https://cdn1.suno.ai/" & $sId & ".mp4"
+EndFunc   ;==>_SunoRewriteURL
