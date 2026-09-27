@@ -48,7 +48,9 @@ Click **LIVE** in the title bar to switch to Live View mode.
 
 Single songs (`suno.com/song/<id>`) work like any other link — Video/Audio, Live View, all of it.
 
-**Not supported on purpose:** playlists / batch-downloading multiple songs at once. This is a deliberate limitation, not a bug — only single-song links are handled.
+**Not supported on purpose:** playlists / batch-downloading multiple songs at once / private and unpublic songs.
+
+This is a deliberate limitation, not a bug — only single-song links are handled.
 
 ---
 
