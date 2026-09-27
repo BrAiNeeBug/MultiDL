@@ -2,10 +2,19 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=7.1.0.8
+#AutoIt3Wrapper_Res_Fileversion=8.1.0.0
+#AutoIt3Wrapper_UseUpx=y
+#AutoIt3Wrapper_Res_Language=1033
+#AutoIt3Wrapper_Res_requestedExecutionLevel=None
+#AutoIt3Wrapper_Add_Includes=n
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
+#AutoIt3Wrapper_AU3Check_Parameters=-w 1 -w 2 -w- 4 -w 6
+#AutoIt3Wrapper_Run_Stop_OnError=y
+#AutoIt3Wrapper_Run_After=del /f /q %scriptdir%\%scriptfile%_stripped.au3
 #AutoIt3Wrapper_Run_Tidy=y
+#Tidy_Parameters=/rel
 #AutoIt3Wrapper_Run_Au3Stripper=y
+#Au3Stripper_Parameters=/so /rm
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #include-once
 #include <GUIConstantsEx.au3>
@@ -19,9 +28,8 @@
 #include <WinAPI.au3>
 #include <WindowsStylesConstants.au3>
 #include <InetConstants.au3>
-
 ; ---- Konstanten ----
-Global Const $APP_TITLE = "BrAiNee's MultiDL v8"
+Global Const $APP_TITLE = "BrAiNee's MultiDL v8.1"
 Global Const $BIN_DIR = @ScriptDir & "\bin"
 Global Const $DL_DIR = @ScriptDir & "\MultiDL-Downloads"
 Global Const $YTDLP_EXE = $BIN_DIR & "\yt-dlp.exe"
@@ -34,13 +42,11 @@ Global Const $CLR_ACCENT = 0xFF0000
 Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
-
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.0.0.1"
+Global Const $APP_VERSION = "8.1.0.0"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
-
 ; ---- Modus: False = Video, True = MP3 ----
 Global $bMP3Mode = False
 ; ---- Playlist-Modus: False = einzelnes Video, True = ganze Playlist ----
@@ -62,267 +68,215 @@ Global $sLastFile = ""
 Global $bPlayerOpened = False
 ; ---- Zeitpunkt an dem der Live-Download gestartet wurde (fuer Player-Grace-Period) ----
 Global $g_iLiveStartTick = 0
-
 ; ---- Verwaiste Prozesse von einem Absturz aufraeumen, dann Startup Check ----
 _KillStaleProcesses()
 _StartupCheck()
-
 ; ---- GUI aufbauen ----
 Local $hGUI = GUICreate($APP_TITLE, 560, 524, -1, -1, $WS_POPUP + $WS_BORDER)
 GUISetBkColor($CLR_BG, $hGUI)
-
 ; Titelleiste
 Local $hTitleBar = GUICtrlCreateLabel("", 0, 0, 560, 36)
 GUICtrlSetBkColor($hTitleBar, $CLR_PANEL)
-
 Local $hIcon = GUICtrlCreateLabel(">", 12, 8, 24, 22)
 GUICtrlSetFont($hIcon, 13, 800, 0, "Segoe UI")
 GUICtrlSetColor($hIcon, $CLR_ACCENT)
 GUICtrlSetBkColor($hIcon, $CLR_PANEL)
-
 Local $hTitleText = GUICtrlCreateLabel($APP_TITLE, 38, 9, 200, 20)
 GUICtrlSetFont($hTitleText, 10, 700, 0, "Segoe UI")
 GUICtrlSetColor($hTitleText, $CLR_TEXT)
 GUICtrlSetBkColor($hTitleText, $CLR_PANEL)
-
 ; Update-Hinweis (nur sichtbar wenn neue Version gefunden wurde)
 Local $hUpdateBadge = GUICtrlCreateLabel("", 246, 9, 190, 20)
 GUICtrlSetFont($hUpdateBadge, 8, 700, 0, "Segoe UI")
 GUICtrlSetColor($hUpdateBadge, 0x0F0F0F)
 GUICtrlSetBkColor($hUpdateBadge, 0xFFAA00)
 GUICtrlSetState($hUpdateBadge, $GUI_HIDE)
-
 ; Live-Button in Titelleiste
 Local $hBtnLive = GUICtrlCreateLabel(" LIVE ", 450, 8, 48, 20)
 GUICtrlSetFont($hBtnLive, 8, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnLive, $CLR_TEXT)
 GUICtrlSetBkColor($hBtnLive, 0x660000)
-
 Local $hClose = GUICtrlCreateLabel("x", 527, 8, 24, 22)
 GUICtrlSetFont($hClose, 10, 700, 0, "Segoe UI")
 GUICtrlSetColor($hClose, $CLR_MUTED)
 GUICtrlSetBkColor($hClose, $CLR_PANEL)
-
 ; Trennlinie
 Local $hLine = GUICtrlCreateLabel("", 0, 36, 560, 2)
 GUICtrlSetBkColor($hLine, $CLR_ACCENT)
-
 ; ---- URL Eingabe ----
 Local $hLabelURL = GUICtrlCreateLabel("Data URL:", 24, 58, 250, 18)
 GUICtrlSetFont($hLabelURL, 9, 600, 0, "Segoe UI")
 GUICtrlSetColor($hLabelURL, $CLR_TEXT)
 GUICtrlSetBkColor($hLabelURL, $CLR_BG)
-
 Local $hInput = GUICtrlCreateEdit("", 24, 80, 512, 48, $ES_MULTILINE + $ES_AUTOVSCROLL + $WS_VSCROLL)
 GUICtrlSetFont($hInput, 9, 400, 0, "Consolas")
 GUICtrlSetColor($hInput, $CLR_TEXT)
 GUICtrlSetBkColor($hInput, $CLR_INPUT)
-
 ; ---- Bereinigter Link ----
 Local $hLabelClean = GUICtrlCreateLabel("Cleaned Link:", 24, 146, 200, 18)
 GUICtrlSetFont($hLabelClean, 9, 600, 0, "Segoe UI")
 GUICtrlSetColor($hLabelClean, $CLR_MUTED)
 GUICtrlSetBkColor($hLabelClean, $CLR_BG)
-
 Local $hCleanDisplay = GUICtrlCreateLabel("---", 24, 166, 512, 18)
 GUICtrlSetFont($hCleanDisplay, 9, 400, 0, "Consolas")
 GUICtrlSetColor($hCleanDisplay, 0x4FC3F7)
 GUICtrlSetBkColor($hCleanDisplay, $CLR_BG)
-
 ; ---- Trennlinie ----
 Local $hLine2 = GUICtrlCreateLabel("", 24, 198, 512, 1)
 GUICtrlSetBkColor($hLine2, 0x2A2A2A)
-
 ; ---- Format Toggle ----
 Local $hLabelFormat = GUICtrlCreateLabel("Format:", 24, 212, 60, 20)
 GUICtrlSetFont($hLabelFormat, 9, 600, 0, "Segoe UI")
 GUICtrlSetColor($hLabelFormat, $CLR_MUTED)
 GUICtrlSetBkColor($hLabelFormat, $CLR_BG)
-
 Local $hToggleVideo = GUICtrlCreateLabel("  Video(MP4)  ", 88, 207, 80, 26)
 GUICtrlSetFont($hToggleVideo, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleVideo, $CLR_TEXT)
 GUICtrlSetBkColor($hToggleVideo, $CLR_ACCENT)
-
 Local $hToggleMP3 = GUICtrlCreateLabel("  Audio(MP3)  ", 168, 207, 80, 26)
 GUICtrlSetFont($hToggleMP3, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleMP3, $CLR_MUTED)
 GUICtrlSetBkColor($hToggleMP3, 0x222222)
-
 Local $hModeInfo = GUICtrlCreateLabel("(best video quality)", 258, 212, 280, 18)
 GUICtrlSetFont($hModeInfo, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hModeInfo, $CLR_MUTED)
 GUICtrlSetBkColor($hModeInfo, $CLR_BG)
-
 ; ---- Playlist Toggle ----
 Local $hLabelPlaylist = GUICtrlCreateLabel("Mode:", 24, 244, 60, 20)
 GUICtrlSetFont($hLabelPlaylist, 9, 600, 0, "Segoe UI")
 GUICtrlSetColor($hLabelPlaylist, $CLR_MUTED)
 GUICtrlSetBkColor($hLabelPlaylist, $CLR_BG)
-
 Local $hToggleSingle = GUICtrlCreateLabel("  Single  ", 88, 239, 90, 26)
 GUICtrlSetFont($hToggleSingle, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleSingle, $CLR_TEXT)
 GUICtrlSetBkColor($hToggleSingle, $CLR_ACCENT)
-
 Local $hTogglePlaylist = GUICtrlCreateLabel("  Playlist  ", 178, 239, 90, 26)
 GUICtrlSetFont($hTogglePlaylist, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hTogglePlaylist, $CLR_MUTED)
 GUICtrlSetBkColor($hTogglePlaylist, 0x222222)
-
 Local $hPlaylistInfo = GUICtrlCreateLabel("(download single file)", 278, 244, 260, 18)
 GUICtrlSetFont($hPlaylistInfo, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hPlaylistInfo, $CLR_MUTED)
 GUICtrlSetBkColor($hPlaylistInfo, $CLR_BG)
-
 ; ---- Buttons ----
 Local $hBtnDownload = GUICtrlCreateButton("Start", 24, 282, 224, 38)
 GUICtrlSetFont($hBtnDownload, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnDownload, $CLR_TEXT)
 GUICtrlSetBkColor($hBtnDownload, 0x00AA44)
-
 Local $hBtnCMD = GUICtrlCreateButton("CMD: OFF", 256, 282, 84, 38)
 GUICtrlSetFont($hBtnCMD, 8, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnCMD, $CLR_MUTED)
 GUICtrlSetBkColor($hBtnCMD, 0x1A1A1A)
-
 Local $hBtnPaste = GUICtrlCreateButton("PasteStart", 348, 282, 110, 38)
 GUICtrlSetFont($hBtnPaste, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnPaste, $CLR_TEXT)
 GUICtrlSetBkColor($hBtnPaste, 0x1E3A1E)
-
 Local $hBtnUpdate = GUICtrlCreateButton("Update", 466, 282, 70, 38)
 GUICtrlSetFont($hBtnUpdate, 8, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnUpdate, $CLR_MUTED)
 GUICtrlSetBkColor($hBtnUpdate, 0x1A1A2A)
-
 ; ---- Fortschritts-Bereich ----
 Local $hLine3 = GUICtrlCreateLabel("", 24, 334, 512, 1)
 GUICtrlSetBkColor($hLine3, 0x2A2A2A)
-
 Local $hProgLabel = GUICtrlCreateLabel("Ready.", 24, 342, 460, 16)
 GUICtrlSetFont($hProgLabel, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hProgLabel, $CLR_MUTED)
 GUICtrlSetBkColor($hProgLabel, $CLR_BG)
-
 Local $hProgPct = GUICtrlCreateLabel("", 490, 342, 46, 16)
 GUICtrlSetFont($hProgPct, 8, 700, 0, "Segoe UI")
 GUICtrlSetColor($hProgPct, $CLR_ACCENT)
 GUICtrlSetBkColor($hProgPct, $CLR_BG)
-
 Local $hProgBG = GUICtrlCreateLabel("", 24, 364, 512, 12)
 GUICtrlSetBkColor($hProgBG, 0x222222)
-
 Local $hProgBar = GUICtrlCreateLabel("", 24, 364, 0, 12)
 GUICtrlSetBkColor($hProgBar, $CLR_ACCENT)
-
 ; ---- Statuszeile ----
 Local $hStatus = GUICtrlCreateLabel("Ready.", 0, 492, 560, 32)
 GUICtrlSetFont($hStatus, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hStatus, $CLR_MUTED)
 GUICtrlSetBkColor($hStatus, $CLR_PANEL)
 GUICtrlSetStyle($hStatus, $SS_CENTER)
-
 ; ---- Play-Bereich ----
 Local $hLine4 = GUICtrlCreateLabel("", 24, 386, 512, 1)
 GUICtrlSetBkColor($hLine4, 0x2A2A2A)
-
 Local $hBtnPlay = GUICtrlCreateLabel("> Play last File", 24, 398, 242, 36)
 GUICtrlSetFont($hBtnPlay, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnPlay, $CLR_TEXT)
 GUICtrlSetBkColor($hBtnPlay, 0x1A3A1A)
-
 Local $hBtnFolder = GUICtrlCreateLabel("[>] View Downloads", 278, 398, 258, 36)
 GUICtrlSetFont($hBtnFolder, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnFolder, $CLR_MUTED)
 GUICtrlSetBkColor($hBtnFolder, 0x1A1A2A)
-
 Local $hPlayLabel = GUICtrlCreateLabel("No download completed yet.", 24, 440, 512, 16)
 GUICtrlSetFont($hPlayLabel, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hPlayLabel, $CLR_MUTED)
 GUICtrlSetBkColor($hPlayLabel, $CLR_BG)
-
 ; ============================================================
 ; ---- LIVE VIEW Controls (anfangs versteckt) ----
 ; ============================================================
-
 ; Roter Balken oben mit LIVE-Schriftzug
 Local $hLiveBanner = GUICtrlCreateLabel("", 0, 38, 560, 40)
 GUICtrlSetBkColor($hLiveBanner, 0x880000)
 GUICtrlSetState($hLiveBanner, $GUI_HIDE)
-
 Local $hLiveTitle = GUICtrlCreateLabel(">> LIVE VIEW", 20, 47, 300, 22)
 GUICtrlSetFont($hLiveTitle, 11, 800, 0, "Segoe UI")
 GUICtrlSetColor($hLiveTitle, $CLR_TEXT)
 GUICtrlSetBkColor($hLiveTitle, 0x880000)
 GUICtrlSetState($hLiveTitle, $GUI_HIDE)
-
-
 ; URL Input
 Local $hLiveLabelURL = GUICtrlCreateLabel("URL:", 24, 94, 60, 18)
 GUICtrlSetFont($hLiveLabelURL, 9, 600, 0, "Segoe UI")
 GUICtrlSetColor($hLiveLabelURL, $CLR_MUTED)
 GUICtrlSetBkColor($hLiveLabelURL, $CLR_BG)
 GUICtrlSetState($hLiveLabelURL, $GUI_HIDE)
-
 Local $hLiveInput = GUICtrlCreateEdit("", 24, 114, 512, 48, $ES_MULTILINE + $ES_AUTOVSCROLL + $WS_VSCROLL)
 GUICtrlSetFont($hLiveInput, 9, 400, 0, "Consolas")
 GUICtrlSetColor($hLiveInput, $CLR_TEXT)
 GUICtrlSetBkColor($hLiveInput, $CLR_INPUT)
 GUICtrlSetState($hLiveInput, $GUI_HIDE)
-
 ; Info-Text
 Local $hLiveInfo = GUICtrlCreateLabel("Opens _watch_live.mp4 in your player while downloading.  File stays in downloads folder.", 24, 172, 512, 16)
 GUICtrlSetFont($hLiveInfo, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hLiveInfo, $CLR_MUTED)
 GUICtrlSetBkColor($hLiveInfo, $CLR_BG)
 GUICtrlSetState($hLiveInfo, $GUI_HIDE)
-
 ; Start/Stop Button
 Local $hLiveBtnStart = GUICtrlCreateButton("Start Live", 24, 200, 250, 44)
 GUICtrlSetFont($hLiveBtnStart, 10, 700, 0, "Segoe UI")
 GUICtrlSetColor($hLiveBtnStart, $CLR_TEXT)
 GUICtrlSetBkColor($hLiveBtnStart, 0x880000)
 GUICtrlSetState($hLiveBtnStart, $GUI_HIDE)
-
 ; Paste+Start Button
 Local $hLiveBtnPaste = GUICtrlCreateButton("PasteStart", 286, 200, 250, 44)
 GUICtrlSetFont($hLiveBtnPaste, 10, 700, 0, "Segoe UI")
 GUICtrlSetColor($hLiveBtnPaste, $CLR_TEXT)
 GUICtrlSetBkColor($hLiveBtnPaste, 0x1E2A1E)
 GUICtrlSetState($hLiveBtnPaste, $GUI_HIDE)
-
 ; Trennlinie
 Local $hLiveLine = GUICtrlCreateLabel("", 24, 258, 512, 1)
 GUICtrlSetBkColor($hLiveLine, 0x2A2A2A)
 GUICtrlSetState($hLiveLine, $GUI_HIDE)
-
 ; Fortschritts-Label
 Local $hLiveProgLabel = GUICtrlCreateLabel("Ready.", 24, 268, 460, 16)
 GUICtrlSetFont($hLiveProgLabel, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hLiveProgLabel, $CLR_MUTED)
 GUICtrlSetBkColor($hLiveProgLabel, $CLR_BG)
 GUICtrlSetState($hLiveProgLabel, $GUI_HIDE)
-
 Local $hLiveProgSize = GUICtrlCreateLabel("", 490, 268, 46, 16)
 GUICtrlSetFont($hLiveProgSize, 8, 700, 0, "Segoe UI")
 GUICtrlSetColor($hLiveProgSize, 0x0088FF)
 GUICtrlSetBkColor($hLiveProgSize, $CLR_BG)
 GUICtrlSetState($hLiveProgSize, $GUI_HIDE)
-
 ; Fortschrittsbalken (pulsierend)
 Local $hLiveProgBG = GUICtrlCreateLabel("", 24, 290, 512, 10)
 GUICtrlSetBkColor($hLiveProgBG, 0x222222)
 GUICtrlSetState($hLiveProgBG, $GUI_HIDE)
-
 Local $hLiveProgBar = GUICtrlCreateLabel("", 24, 290, 0, 10)
 GUICtrlSetBkColor($hLiveProgBar, 0x0088FF)
 GUICtrlSetState($hLiveProgBar, $GUI_HIDE)
-
 ; ---- Fenster anzeigen ----
 GUISetState(@SW_SHOW, $hGUI)
 _CheckForUpdate($hUpdateBadge)
-
 ; ---- Hauptschleife ----
 Local $bDragging = False
 Local $iDragX, $iDragY
@@ -330,11 +284,9 @@ Local $iPosX, $iPosY
 Local $bLiveView = False
 ; Pulse fuer Live-Balken
 Local $iPulse = 0, $iPulseDir = 1
-
 While 1
 	Local $aMsg = GUIGetMsg(1)
 	Local $iMsg = $aMsg[0]
-
 	; ---- Fortschritt lesen wenn Download laeuft ----
 	If $hDLProc <> 0 Then
 		If $bLiveView Then
@@ -343,11 +295,9 @@ While 1
 			_ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		EndIf
 	EndIf
-
 	Select
 		Case $iMsg = $GUI_EVENT_CLOSE
 			ExitLoop
-
 		Case $iMsg = $GUI_EVENT_PRIMARYDOWN
 			Local $aCursorPos = MouseGetPos()
 			Local $aWinPos = WinGetPos($hGUI)
@@ -381,17 +331,13 @@ While 1
 				$iPosX = $aWinPos[0]
 				$iPosY = $aWinPos[1]
 			EndIf
-
 		Case $iMsg = $GUI_EVENT_PRIMARYUP
 			$bDragging = False
-
 		Case $iMsg = $GUI_EVENT_MOUSEMOVE
 			If $bDragging Then
 				Local $aCur = MouseGetPos()
 				WinMove($hGUI, "", $iPosX + ($aCur[0] - $iDragX), $iPosY + ($aCur[1] - $iDragY))
 			EndIf
-
-
 			; ---- Live Start/Stop ----
 		Case $iMsg = $hLiveBtnStart
 			If $hDLProc <> 0 Then
@@ -421,7 +367,6 @@ While 1
 					_StartLive($sRaw, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
 				EndIf
 			EndIf
-
 			; ---- Live PasteStart ----
 		Case $iMsg = $hLiveBtnPaste
 			If $hDLProc <> 0 Then
@@ -435,7 +380,6 @@ While 1
 					_StartLive($sClip, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
 				EndIf
 			EndIf
-
 			; Toggle: Video
 		Case $iMsg = $hToggleVideo
 			If $bMP3Mode Then
@@ -447,7 +391,6 @@ While 1
 				GUICtrlSetData($hModeInfo, "(best video quality)")
 				_SetStatus($hStatus, "Modus: Video", $CLR_MUTED)
 			EndIf
-
 			; Toggle: MP3
 		Case $iMsg = $hToggleMP3
 			If Not $bMP3Mode Then
@@ -459,7 +402,6 @@ While 1
 				GUICtrlSetData($hModeInfo, "(best audio quality)")
 				_SetStatus($hStatus, "Modus: Audio", $CLR_MUTED)
 			EndIf
-
 			; Toggle: Einzeln
 		Case $iMsg = $hToggleSingle
 			If $bPlaylistMode Then
@@ -475,7 +417,6 @@ While 1
 				GUICtrlSetState($hPlayLabel, $GUI_SHOW)
 				GUICtrlSetState($hLine4, $GUI_SHOW)
 			EndIf
-
 			; Toggle: Playlist
 		Case $iMsg = $hTogglePlaylist
 			If Not $bPlaylistMode Then
@@ -491,7 +432,6 @@ While 1
 				GUICtrlSetState($hPlayLabel, $GUI_HIDE)
 				GUICtrlSetState($hLine4, $GUI_HIDE)
 			EndIf
-
 			; CMD-Fenster Toggle
 		Case $iMsg = $hBtnCMD
 			$bShowCMD = Not $bShowCMD
@@ -504,7 +444,6 @@ While 1
 				GUICtrlSetColor($hBtnCMD, $CLR_MUTED)
 				GUICtrlSetBkColor($hBtnCMD, 0x1A1A1A)
 			EndIf
-
 			; Download / Stop Toggle
 		Case $iMsg = $hBtnDownload
 			If $hDLProc <> 0 Then
@@ -537,7 +476,6 @@ While 1
 					_StartDownload($sClean, $hStatus, $hProgBar, $hProgLabel, $hProgPct)
 				EndIf
 			EndIf
-
 			; Einfuegen & Start
 		Case $iMsg = $hBtnPaste
 			If $hDLProc <> 0 Then
@@ -553,7 +491,6 @@ While 1
 					_StartDownload($sClean, $hStatus, $hProgBar, $hProgLabel, $hProgPct)
 				EndIf
 			EndIf
-
 			; Datei abspielen
 		Case $iMsg = $hBtnPlay
 			If $sLastFile <> "" And FileExists($sLastFile) Then
@@ -563,11 +500,9 @@ While 1
 			Else
 				_SetStatus($hStatus, "No download completed yet.", 0xFFAA00)
 			EndIf
-
 			; Download-Ordner oeffnen
 		Case $iMsg = $hBtnFolder
 			ShellExecute($DL_DIR)
-
 			; Update
 		Case $iMsg = $hBtnUpdate
 			If $hDLProc <> 0 Then
@@ -575,13 +510,10 @@ While 1
 			Else
 				_UpdateTools($hStatus, $hProgBar, $hProgLabel, $hProgPct)
 			EndIf
-
 	EndSelect
 WEnd
-
 GUIDelete($hGUI)
 Exit
-
 ; ============================================================
 ;  Show/Hide Normal Controls
 ; ============================================================
@@ -614,7 +546,6 @@ Func _ShowNormalControls($iState, $hLabelURL, $hInput, $hLabelClean, $hCleanDisp
 	GUICtrlSetState($hPlayLabel, $iState)
 	GUICtrlSetState($hStatus, $iState)
 EndFunc   ;==>_ShowNormalControls
-
 ; ============================================================
 ;  Show/Hide Live Controls
 ; ============================================================
@@ -632,7 +563,6 @@ Func _ShowLiveControls($iState, $hLiveBanner, $hLiveTitle, $hLiveLabelURL, $hLiv
 	GUICtrlSetState($hLiveProgBG, $iState)
 	GUICtrlSetState($hLiveProgBar, $iState)
 EndFunc   ;==>_ShowLiveControls
-
 ; ============================================================
 ;  URL bereinigen
 ; ============================================================
@@ -644,13 +574,11 @@ Func _CleanURL($sURL)
 	EndIf
 	Return $sURL
 EndFunc   ;==>_CleanURL
-
 ; Gibt den --js-runtimes Parameter zurueck falls deno.exe vorhanden ist, sonst leer
 Func _JsRuntimeArg()
 	If FileExists($DENO_EXE) Then Return ' --js-runtimes deno:"' & $DENO_EXE & '"'
 	Return ""
 EndFunc   ;==>_JsRuntimeArg
-
 ; ============================================================
 ;  Erkennt YouTubes "Sign in to confirm you're not a bot"-Sperre.
 ;  Das ist kein normaler Download-Fehler sondern eine IP-basierte
@@ -663,13 +591,11 @@ Func _IsBotBlockLine($s)
 			Or (StringInStr($s, "confirm you're not a bot", 0, 1) > 0) _
 			Or (StringInStr($s, "confirm you are not a bot", 0, 1) > 0)
 EndFunc   ;==>_IsBotBlockLine
-
 ; Fuegt den IPv4-Fallback genau einmal zu einem bestehenden yt-dlp-Aufruf hinzu.
 Func _ForceIPv4CMD($sCMD)
 	If StringInStr($sCMD, " --force-ipv4", 0, 1) > 0 Then Return $sCMD
 	Return StringReplace($sCMD, " --newline", " --force-ipv4 --newline", 1, 1)
 EndFunc   ;==>_ForceIPv4CMD
-
 ; ============================================================
 ;  Erkennt HTTP 416 ("Requested Range Not Satisfiable"). Passiert
 ;  vor allem wenn noch alte yt-dlp/ffmpeg-Prozesse (z.B. nach einem
@@ -684,19 +610,16 @@ Func _Is416Line($s)
 			Or StringInStr($s, "Range Not Satisfiable", 0, 1) > 0 _
 			Or StringInStr($s, "HTTP Error 416", 0, 1) > 0)
 EndFunc   ;==>_Is416Line
-
 Func _DLErrorLabel($sRaw)
 	If _IsBotBlockLine($sRaw) Then Return "YouTube blocked you (bot-check)! Restart your router for a new IP."
 	If _Is416Line($sRaw) Then Return "ERROR 416 - too much still open! Reboot PC/router, then retry."
 	Return StringLeft($sRaw, 75)
 EndFunc   ;==>_DLErrorLabel
-
 Func _DLErrorStatus($sRaw)
 	If _IsBotBlockLine($sRaw) Then Return "BLOCKED by YouTube (bot-check)! Restart your router (new IP) and try again in a bit."
 	If _Is416Line($sRaw) Then Return "ERROR 416! Leftover connections/processes are blocking this. Reboot your PC (or router) and try again."
 	Return "ERROR! Download failed (try LIVE-Mode!)"
 EndFunc   ;==>_DLErrorStatus
-
 ; ============================================================
 ;  Datei mit dem passenden Player oeffnen.
 ;  Unter Wine/Linux gibt's meist keine Datei-Assoziation fuer mp4,
@@ -712,7 +635,6 @@ Func _PlayFile($sFile)
 		ShellExecute($sFile)
 	EndIf
 EndFunc   ;==>_PlayFile
-
 ; ============================================================
 ;  Wine haengt an jeden gestarteten Konsolen-Prozess (ffplay.exe
 ;  ist ein Konsolen-Subsystem-Build) automatisch ein sichtbares
@@ -730,7 +652,6 @@ Func _HideWineConsole()
 	Local $hConsole = WinWait("[REGEXPTITLE:(?i).*ffplay\.exe.*]", "", 3)
 	If $hConsole <> 0 Then WinSetState($hConsole, "", @SW_HIDE)
 EndFunc   ;==>_HideWineConsole
-
 ; ============================================================
 ;  Live-View: yt-dlp starten, Datei oeffnen
 ; ============================================================
@@ -738,31 +659,25 @@ Func _StartLive($sURL, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 	If $hDLProc <> 0 Then Return
 	$sURL = StringStripWS($sURL, 3)
 	If _IsSunoURL($sURL) Then $sURL = _SunoRewriteURL($sURL)     ; <-- NEU
-
 	If Not StringRegExp($sURL, "(?i)^https?://") Then
 		GUICtrlSetData($hLiveProgLabel, "Bad URL.")
 		Return
 	EndIf
-
 	Local $iAmp = StringInStr($sURL, "&")
 	If $iAmp > 0 Then $sURL = StringLeft($sURL, $iAmp - 1)
-
 	GUICtrlSetPos($hLiveProgBar, 24, 290, 0, 10)
 	GUICtrlSetBkColor($hLiveProgBar, 0x0088FF)
 	GUICtrlSetData($hLiveProgLabel, "Waiting for file...")
 	GUICtrlSetData($hLiveProgSize, "")
 	GUICtrlSetData($hLiveBtnStart, "Stop")
 	GUICtrlSetBkColor($hLiveBtnStart, 0x444444)
-
 	; HIER WAR DER FEHLER: ffmpeg-location gefehlt + extractor-args hinzugefuegt gegen 403
 	Local $sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '" --no-playlist --no-part --extractor-args "youtube:player_client=android,web"' & _JsRuntimeArg() & ' -f "best[ext=mp4]/best" --newline -o "' & $DL_DIR & '\_watch_live.mp4" "' & $sURL & '"'
 	$g_sLiveCMD = $sCMD
 	$g_bIPv4Retried = False
 	$g_bBotBlock = False
-
 	FileDelete($DL_DIR & "\_watch_live.mp4")
 	If $bShowCMD Then Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
-
 	$bDLFailed = False
 	$sDLError = ""
 	$hDLProc = Run($sCMD, $DL_DIR, @SW_HIDE, 6)
@@ -773,12 +688,10 @@ EndFunc   ;==>_StartLive
 ; ============================================================
 Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtnStart)
 	Static Local $iPulse = 0, $iPulseDir = 1
-
 	; yt-dlp kann Fehler auf STDERR ausgeben. Bei Run(..., 6) lesen wir deshalb
 	; beide Pipes. Wichtig: @error bei StdoutRead ist KEIN Erfolgs-Signal.
 	Local $sStdout = StdoutRead($hDLProc)
 	Local $sStderr = StderrRead($hDLProc)
-
 	; Beide Ausgaben gemeinsam verarbeiten.
 	Local $sAllOutput = $sStdout & @LF & $sStderr
 	If $sAllOutput <> @LF Then
@@ -786,7 +699,6 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 		For $i = 1 To $aLines[0]
 			Local $sTrimmed = StringStripWS($aLines[$i], 3)
 			If StringLen($sTrimmed) < 4 Then ContinueLoop
-
 			; YouTube Bot-Login erkannt: nicht sofort als Fehler anzeigen.
 			; Der Prozess darf sauber beenden und wird danach genau einmal
 			; mit --force-ipv4 neu gestartet.
@@ -796,7 +708,6 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 				$sDLError = $sTrimmed
 				ContinueLoop
 			EndIf
-
 			; Groesse aus [download]-Zeile
 			Local $aSize = StringRegExp($sTrimmed, "\[download\]\s+([\d\.]+\s*(?:KiB|MiB|GiB))", 1)
 			If Not @error And UBound($aSize) >= 1 Then
@@ -810,7 +721,6 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 				GUICtrlSetPos($hLiveProgBar, 24, 290, $iPulse, 10)
 				ContinueLoop
 			EndIf
-
 			If StringInStr($sTrimmed, "ERROR", 0, 1) > 0 _
 					Or StringInStr($sTrimmed, "403 Forbidden", 0, 1) > 0 _
 					Or StringInStr($sTrimmed, "HTTP Error 403", 0, 1) > 0 _
@@ -820,7 +730,6 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 			EndIf
 		Next
 	EndIf
-
 	; Player einmalig oeffnen sobald Datei da ist.
 	If Not $bPlayerOpened Then
 		Local $sOutFile = $DL_DIR & "\_watch_live.mp4"
@@ -829,10 +738,8 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 			$bPlayerOpened = True
 		EndIf
 	EndIf
-
 	; Prozess laeuft noch, also weiterwarten.
 	If ProcessExists($hDLProc) Then Return
-
 	; ------------------------------------------------------------
 	; Bot-Check: genau EIN Retry mit --force-ipv4.
 	; Erst wenn auch dieser Lauf wieder am Bot-Check scheitert,
@@ -843,26 +750,22 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 		$g_bBotBlock = False
 		$bDLFailed = False
 		$sDLError = ""
-
 		FileDelete($DL_DIR & "\_watch_live.mp4")
 		$bPlayerOpened = False
 		$g_iLiveStartTick = TimerInit()
 		$iPulse = 0
 		$iPulseDir = 1
-
 		GUICtrlSetPos($hLiveProgBar, 24, 290, 0, 10)
 		GUICtrlSetBkColor($hLiveProgBar, 0x0088FF)
 		GUICtrlSetData($hLiveProgLabel, "Bot-check detected, retrying with IPv4...")
 		GUICtrlSetData($hLiveProgSize, "")
 		GUICtrlSetData($hLiveBtnStart, "Stop")
 		GUICtrlSetBkColor($hLiveBtnStart, 0x444444)
-
 		Local $sRetryCMD = _ForceIPv4CMD($g_sLiveCMD)
 		If $bShowCMD Then Run('cmd.exe /k "' & $sRetryCMD & '"', $DL_DIR, @SW_SHOW)
 		$hDLProc = Run($sRetryCMD, $DL_DIR, @SW_HIDE, 6)
 		Return
 	EndIf
-
 	; Zweiter Bot-Check oder anderer Live-Fehler: NICHT "Done." anzeigen.
 	If $bDLFailed Then
 		; Bei 416 nochmal Leichencheck - vielleicht haengt gerade neu was rum.
@@ -883,7 +786,6 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 		$g_bBotBlock = False
 		Return
 	EndIf
-
 	; Prozess beendet sich ohne Fehler, z.B. weil der Live-Stream wirklich endet.
 	GUICtrlSetPos($hLiveProgBar, 24, 290, 512, 10)
 	GUICtrlSetBkColor($hLiveProgBar, 0x00AA44)
@@ -894,13 +796,16 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 	$hDLProc = 0
 	$bPlayerOpened = False
 EndFunc   ;==>_ReadLiveProgress
-
 ; ============================================================
 ;  yt-dlp starten (Video oder MP3)
 ; ============================================================
 Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
-	If _IsSunoURL($sURL) Then $sURL = _SunoRewriteURL($sURL)     ; <-- NEU
-
+	Local $sOutTemplate = "%(title)s.%(ext)s"
+	If _IsSunoURL($sURL) Then
+		Local $sSunoTitle = _SunoClipTitle(_SunoClipId($sURL))     ; <-- NEU: echten Titel per API holen, BEVOR die URL auf die cdn umgeschrieben wird
+		If $sSunoTitle <> "" Then $sOutTemplate = $sSunoTitle & ".%(ext)s"
+		$sURL = _SunoRewriteURL($sURL)
+	EndIf
 	If Not FileExists($YTDLP_EXE) Then
 		MsgBox(16, $APP_TITLE, "yt-dlp.exe not found!" & @CRLF & "needed in: " & $YTDLP_EXE)
 		_SetStatus($hStatusLabel, "yt-dlp.exe not found!", 0xFF5252)
@@ -910,7 +815,6 @@ Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
 		_SetStatus($hStatusLabel, "Bad Link.", 0xFFAA00)
 		Return
 	EndIf
-
 	GUICtrlSetPos($hProgBar, 24, 364, 0, 12)
 	GUICtrlSetBkColor($hProgBar, $CLR_ACCENT)
 	GUICtrlSetData($hProgLabel, "Starting Download...")
@@ -924,11 +828,9 @@ Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
 		GUICtrlSetData($hPlayLabel, "Download running...")
 		GUICtrlSetColor($hPlayLabel, $CLR_MUTED)
 	EndIf
-
 	Local $sCMD
 	Local $sPlFlag = " --no-playlist"
 	If $bPlaylistMode Then $sPlFlag = " --yes-playlist"
-
 	If $bMP3Mode Then
 		If Not FileExists($FFMPEG_EXE) Then
 			MsgBox(16, $APP_TITLE, "ffmpeg.exe not found!" & @CRLF & "needed in: " & $FFMPEG_EXE)
@@ -936,12 +838,11 @@ Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
 			Return
 		EndIf
 		_SetStatus($hStatusLabel, "MP3 Download started ...", 0x4FC3F7)
-		$sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '" --no-part --extractor-args "youtube:player_client=android,web"' & _JsRuntimeArg() & $sPlFlag & ' -x --audio-format mp3 --audio-quality 0 --newline -o "' & $DL_DIR & '\%(title)s.%(ext)s" "' & $sURL & '"'
+		$sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '" --no-part --extractor-args "youtube:player_client=android,web"' & _JsRuntimeArg() & $sPlFlag & ' -x --audio-format mp3 --audio-quality 0 --newline -o "' & $DL_DIR & '\' & $sOutTemplate & '" "' & $sURL & '"'
 	Else
 		_SetStatus($hStatusLabel, "Video Download started ...", 0x4FC3F7)
-		$sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '" --no-part --extractor-args "youtube:player_client=android,web"' & _JsRuntimeArg() & $sPlFlag & ' -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 --newline -o "' & $DL_DIR & '\%(title)s.%(ext)s" "' & $sURL & '"'
+		$sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '" --no-part --extractor-args "youtube:player_client=android,web"' & _JsRuntimeArg() & $sPlFlag & ' -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 --newline -o "' & $DL_DIR & '\' & $sOutTemplate & '" "' & $sURL & '"'
 	EndIf
-
 	If $bShowCMD Then Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
 	$bDLFailed = False
 	$sDLError = ""
@@ -950,7 +851,6 @@ Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
 	$g_sDownloadCMD = $sCMD
 	$hDLProc = Run($sCMD, $DL_DIR, @SW_HIDE, 6) ; STDOUT + STDERR
 EndFunc   ;==>_StartDownload
-
 ; ============================================================
 ;  Fortschritt aus yt-dlp Output lesen
 ; ============================================================
@@ -958,7 +858,6 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 	; yt-dlp writes errors to STDERR. Therefore read BOTH pipes.
 	Local $sStdout = StdoutRead($hDLProc)
 	Local $sStderr = StderrRead($hDLProc)
-
 	; Parse normal output.
 	If $sStdout <> "" Then
 		Local $aLines = StringSplit($sStdout, @LF, 1)
@@ -981,7 +880,6 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 			EndIf
 		Next
 	EndIf
-
 	; Parse STDERR too. This is where yt-dlp normally prints errors.
 	If $sStderr <> "" Then
 		Local $aErrLines = StringSplit($sStderr, @LF, 1)
@@ -1002,7 +900,6 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 			EndIf
 		Next
 	EndIf
-
 	; Prozess laeuft noch, also weiterwarten.
 	If ProcessExists($hDLProc) Then
 		If $g_bBotBlock Then
@@ -1012,7 +909,6 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		EndIf
 		Return
 	EndIf
-
 	; ------------------------------------------------------------
 	; Bot-Check: genau EIN Retry mit --force-ipv4.
 	; Erst wenn auch dieser Lauf wieder am Bot-Check scheitert,
@@ -1023,19 +919,16 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		$g_bBotBlock = False
 		$bDLFailed = False
 		$sDLError = ""
-
 		GUICtrlSetPos($hProgBar, 24, 364, 0, 12)
 		GUICtrlSetBkColor($hProgBar, $CLR_ACCENT)
 		GUICtrlSetData($hProgPct, "RETRY")
 		GUICtrlSetData($hProgLabel, "Bot-check detected, retrying with IPv4...")
 		_SetStatus($hStatus, "YouTube bot-check detected. Retrying with --force-ipv4...", 0xFFAA00)
-
 		Local $sRetryCMD = _ForceIPv4CMD($g_sDownloadCMD)
 		If $bShowCMD Then Run('cmd.exe /k "' & $sRetryCMD & '"', $DL_DIR, @SW_SHOW)
 		$hDLProc = Run($sRetryCMD, $DL_DIR, @SW_HIDE, 6)
 		Return
 	EndIf
-
 	; Endgueltiger Fehler, inklusive zweitem Bot-Check.
 	If $bDLFailed Then
 		; Bei 416 nochmal Leichencheck - vielleicht haengt gerade neu was rum.
@@ -1057,14 +950,12 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		GUICtrlSetBkColor($hBtnDownload, 0x00AA44)
 		Return
 	EndIf
-
 	; Process exited without an ERROR line: now it is safe to report DONE.
 	GUICtrlSetPos($hProgBar, 24, 364, 512, 12)
 	GUICtrlSetBkColor($hProgBar, 0x00AA44)
 	GUICtrlSetData($hProgPct, "100%")
 	GUICtrlSetData($hProgLabel, "Download DONE!")
 	_SetStatus($hStatus, "DONE! Saved to: " & $DL_DIR, 0x00AA44)
-
 	If Not $bPlaylistMode Then
 		If $sLastFile = "" Or Not FileExists($sLastFile) Then
 			Local $sSearch = FileFindFirstFile($DL_DIR & "\*.*")
@@ -1088,7 +979,6 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 			EndIf
 			If $sNewest <> "" Then $sLastFile = $sNewest
 		EndIf
-
 		GUICtrlSetBkColor($hBtnPlay, 0x00AA44)
 		GUICtrlSetColor($hBtnPlay, $CLR_TEXT)
 		If $sLastFile <> "" Then
@@ -1100,12 +990,10 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 			GUICtrlSetColor($hPlayLabel, 0x00AA44)
 		EndIf
 	EndIf
-
 	$hDLProc = 0
 	GUICtrlSetData($hBtnDownload, "Start")
 	GUICtrlSetBkColor($hBtnDownload, 0x00AA44)
 EndFunc   ;==>_ReadProgress
-
 ; ============================================================
 ;  Eine yt-dlp Output-Zeile auswerten
 ; ============================================================
@@ -1124,7 +1012,6 @@ Func _ParseProgressLine($sLine, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		GUICtrlSetData($hProgLabel, $sShort)
 		Return
 	EndIf
-
 	Local $aDest = StringRegExp($sLine, "\[download\] Destination: (.+)", 1)
 	If Not @error And UBound($aDest) >= 1 Then
 		$sLastFile = StringStripWS($aDest[0], 3)
@@ -1135,7 +1022,6 @@ Func _ParseProgressLine($sLine, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		GUICtrlSetData($hProgLabel, "Lade: " & $sFile)
 		Return
 	EndIf
-
 	Local $aMerge = StringRegExp($sLine, '\[Merger\].*?"(.+?)"', 1)
 	If Not @error And UBound($aMerge) >= 1 Then
 		Local $sMergedFile = StringStripWS($aMerge[0], 3)
@@ -1154,11 +1040,9 @@ Func _ParseProgressLine($sLine, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		GUICtrlSetData($hProgPct, "~99%")
 		Return
 	EndIf
-
 	If StringInStr($sLine, "ERROR") Then
 		$bDLFailed = True
 		$sDLError = $sLine
-
 		GUICtrlSetBkColor($hProgBar, 0xFF5252)
 		GUICtrlSetData($hProgLabel, _DLErrorLabel($sLine))
 		If _IsBotBlockLine($sLine) Then
@@ -1172,8 +1056,6 @@ Func _ParseProgressLine($sLine, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		Return
 	EndIf
 EndFunc   ;==>_ParseProgressLine
-
-
 ; ============================================================
 ;  Wenn MultiDL vorher abgestuerzt ist (z.B. waehrend des Codens
 ;  im IDE beendet), koennen yt-dlp.exe/ffmpeg.exe von diesem Lauf
@@ -1193,7 +1075,6 @@ Func _KillStaleProcesses()
 		EndIf
 	Next
 EndFunc   ;==>_KillStaleProcesses
-
 ; ============================================================
 ;  Startup Check: yt-dlp.exe und ffmpeg.exe pruefen & laden
 ; ============================================================
@@ -1204,7 +1085,6 @@ Func _StartupCheck()
 	Local $bNeedFfmpeg = Not FileExists($FFMPEG_EXE)
 	Local $bNeedDeno = Not FileExists($DENO_EXE)
 	If Not $bNeedYtdlp And Not $bNeedFfmpeg And Not $bNeedDeno Then Return
-
 	Local $hProg = GUICreate("preInstallation...", 420, 110, -1, -1, $WS_POPUP + $WS_BORDER)
 	GUISetBkColor(0x0F0F0F, $hProg)
 	Local $hProgTitle = GUICtrlCreateLabel("preInstallation...", 16, 12, 388, 20)
@@ -1220,7 +1100,6 @@ Func _StartupCheck()
 	Local $hProgBar = GUICtrlCreateLabel("", 16, 68, 0, 8)
 	GUICtrlSetBkColor($hProgBar, 0xFF0000)
 	GUISetState(@SW_SHOW, $hProg)
-
 	If $bNeedYtdlp Then
 		GUICtrlSetData($hProgInfo, "Loading yt-dlp.exe from GitHub...")
 		_ProgBar($hProgBar, 10)
@@ -1232,7 +1111,6 @@ Func _StartupCheck()
 		EndIf
 		_ProgBar($hProgBar, 45)
 	EndIf
-
 	If $bNeedFfmpeg Then
 		GUICtrlSetData($hProgInfo, "Download ffmpeg from GitHub... (approx. 90 MB, takes a moment)")
 		_ProgBar($hProgBar, 50)
@@ -1252,7 +1130,6 @@ Func _StartupCheck()
 			Local $sTag7z = (Not @error And UBound($aTag7z) >= 1) ? $aTag7z[0] : "26.00"
 			Local $sVer7z = StringReplace($sTag7z, ".", "")
 			Local $s7zaURL = "https://github.com/ip7z/7zip/releases/download/" & $sTag7z & "/7z" & $sVer7z & "-extra.7z"
-
 			If Not FileExists($BIN_DIR & "\7zr.exe") Or FileGetSize($BIN_DIR & "\7zr.exe") < 100000 Then
 				GUICtrlSetData($hProgInfo, "Downloading 7zr.exe (v" & $sTag7z & ")...")
 				If Not _Download($s7zrURL, $BIN_DIR & "\7zr.exe", $hProgBar, 85, 88) Then
@@ -1298,7 +1175,6 @@ Func _StartupCheck()
 			Return
 		EndIf
 	EndIf
-
 	If $bNeedDeno Then
 		; JS-Runtime fuer yt-dlp - YouTube verlangt inzwischen JS-Ausfuehrung
 		; zum Entschluesseln der Video-Signatur, ohne das gibt's 403 Forbidden
@@ -1326,13 +1202,11 @@ Func _StartupCheck()
 		; JS-Runtime weiter (mit dem bekannten 403-Risiko)
 		_ProgBar($hProgBar, 98)
 	EndIf
-
 	GUICtrlSetData($hProgInfo, "Done! Everything is ready.")
 	_ProgBar($hProgBar, 100)
 	Sleep(900)
 	GUIDelete($hProg)
 EndFunc   ;==>_StartupCheck
-
 ; ============================================================
 ;  Datei nativ per InetGet herunterladen (Wine-kompatibel)
 ; ============================================================
@@ -1364,7 +1238,6 @@ Func _Download($sURL, $sDest, $hProgBar = 0, $iProgStart = 0, $iProgEnd = 100, $
 	EndIf
 	Return True
 EndFunc   ;==>_Download
-
 ; ============================================================
 ;  ZIP entpacken via PowerShell Expand-Archive - zuverlaessiger
 ;  als Shell.Application, das auf modernen Windows-Systemen oft
@@ -1384,7 +1257,6 @@ Func _UnZipPS($sZipFile, $sDestFolder)
 	FileDelete($sPS1)
 	Return $iExit = 0
 EndFunc   ;==>_UnZipPS
-
 ; ============================================================
 ;  ZIP entpacken via Shell.Application (Fallback, falls PowerShell fehlt)
 ; ============================================================
@@ -1410,25 +1282,20 @@ Func _UnZip($sZipFile, $sDestFolder)
 		If IsObj($oFile) Then $oNsDest.CopyHere($oFile, 4 + 16)
 	Next
 EndFunc   ;==>_UnZip
-
 ; ============================================================
 ;  ffmpeg.exe aus ZIP holen
 ; ============================================================
-
 Func _UnzipFFmpeg($sZip, $sDestDir)
 	$g_sUnzipDebug = ""
 	Local $sTmp = $sDestDir & "\ffmpeg_extracted", $s7zr = $sDestDir & "\7zr.exe", $s7za = $sDestDir & "\7za.exe", $sExtra = $sDestDir & "\7z_extra.7z"
-
 	; alte/leere Reste eines vorherigen fehlgeschlagenen Versuchs entfernen
 	If FileExists($sTmp) Then DirRemove($sTmp, 1)
 	DirCreate($sTmp)
-
 	; Zip-Download pruefen - unter 50 MB ist mit Sicherheit was schiefgelaufen
 	If Not FileExists($sZip) Or FileGetSize($sZip) < 50000000 Then
 		$g_sUnzipDebug = "Zip fehlt oder zu klein (" & (FileExists($sZip) ? FileGetSize($sZip) : 0) & " Bytes) - Download unvollstaendig."
 		Return False
 	EndIf
-
 	If _IsWine() Then
 		If Not FileExists($s7zr) Or FileGetSize($s7zr) < 100000 Then
 			Local $s7zrURLFallback = _Get7zrURL()
@@ -1501,7 +1368,6 @@ Func _UnzipFFmpeg($sZip, $sDestDir)
 	EndIf
 	Return FileExists($sDestDir & "\ffmpeg.exe")
 EndFunc   ;==>_UnzipFFmpeg
-
 Func _CountFilesRecursive($sDir)
 	Local $iCount = 0
 	Local $hFind = FileFindFirstFile($sDir & "\*")
@@ -1518,7 +1384,6 @@ Func _CountFilesRecursive($sDir)
 	FileClose($hFind)
 	Return $iCount
 EndFunc   ;==>_CountFilesRecursive
-
 ; Prueft ob das Script unter Wine laeuft.
 ; Primaer: wine_get_version() in ntdll.dll - die von Wine offiziell dafuer
 ; vorgesehene Erkennungsfunktion, existiert auf JEDER Wine-Version unabhaengig
@@ -1536,7 +1401,6 @@ Func _IsWine()
 	If @error = 0 Then Return True
 	Return False
 EndFunc   ;==>_IsWine
-
 ; ============================================================
 ;  Wartet bis eine Datei rekursiv im Zielordner auftaucht UND
 ;  ihre Groesse sich nicht mehr aendert. Noetig weil
@@ -1564,7 +1428,6 @@ Func _WaitForFile($sSearchDir, $sFileName, $iTimeoutSec = 120)
 	Until $iElapsed >= $iTimeoutSec
 	Return ($sFound <> "")
 EndFunc   ;==>_WaitForFile
-
 ; Sucht rekursiv nach einer Datei mit gegebenem Namen, gibt vollen Pfad zurueck oder ""
 Func _FindFileRecursive($sSearchDir, $sFileName)
 	Local $hFind = FileFindFirstFile($sSearchDir & "\*")
@@ -1587,7 +1450,6 @@ Func _FindFileRecursive($sSearchDir, $sFileName)
 	FileClose($hFind)
 	Return $sResult
 EndFunc   ;==>_FindFileRecursive
-
 Func _FindAndCopyExe($sSearchDir, $sDestDir)
 	Local $hFind = FileFindFirstFile($sSearchDir & "\*")
 	If $hFind = -1 Then Return
@@ -1605,18 +1467,15 @@ Func _FindAndCopyExe($sSearchDir, $sDestDir)
 	WEnd
 	FileClose($hFind)
 EndFunc   ;==>_FindAndCopyExe
-
 ; Progress-Bar Breite setzen (0-100) fuer Startup-Fenster
 Func _ProgBar($hBar, $iPercent)
 	GUICtrlSetPos($hBar, 16, 68, Int(388 * $iPercent / 100), 8)
 EndFunc   ;==>_ProgBar
-
 ; Statuszeile setzen
 Func _SetStatus($hLabel, $sText, $iColor)
 	GUICtrlSetData($hLabel, "  " & $sText)
 	GUICtrlSetColor($hLabel, $iColor)
 EndFunc   ;==>_SetStatus
-
 ; ============================================================
 ;  Update: yt-dlp.exe + ffmpeg.exe neu laden
 ; ============================================================
@@ -1626,7 +1485,6 @@ Func _UpdateTools($hStatus, $hProgBar, $hProgLabel, $hProgPct)
 	GUICtrlSetPos($hProgBar, 24, 364, 0, 12)
 	GUICtrlSetBkColor($hProgBar, $CLR_ACCENT)
 	GUICtrlSetData($hProgPct, "")
-
 	GUICtrlSetData($hProgLabel, "Updating yt-dlp.exe...")
 	Local $sURL1 = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
 	Local $sTmp1 = $YTDLP_EXE & ".tmp"
@@ -1639,7 +1497,6 @@ Func _UpdateTools($hStatus, $hProgBar, $hProgLabel, $hProgPct)
 		_SetStatus($hStatus, "yt-dlp update failed!", 0xFF5252)
 		Return
 	EndIf
-
 	GUICtrlSetData($hProgLabel, "Downloading ffmpeg... (~170 MB)")
 	Local $sURL2 = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 	Local $sZip = $BIN_DIR & "\ffmpeg_update.zip"
@@ -1662,14 +1519,12 @@ Func _UpdateTools($hStatus, $hProgBar, $hProgLabel, $hProgPct)
 		_SetStatus($hStatus, "ffmpeg download failed!", 0xFF5252)
 		Return
 	EndIf
-
 	GUICtrlSetPos($hProgBar, 24, 364, 512, 12)
 	GUICtrlSetBkColor($hProgBar, 0x00AA44)
 	GUICtrlSetData($hProgPct, "Done!")
 	GUICtrlSetData($hProgLabel, "All tools updated!")
 	_SetStatus($hStatus, "Update complete!", 0x00AA44)
 EndFunc   ;==>_UpdateTools
-
 ; ============================================================
 ;  Prueft GitHub Releases auf eine neuere Version als $APP_VERSION.
 ;  Nicht fatal falls das fehlschlaegt (offline, Rate-Limit etc.) -
@@ -1687,7 +1542,6 @@ Func _CheckForUpdate($hUpdateBadge)
 		GUICtrlSetState($hUpdateBadge, $GUI_SHOW)
 	EndIf
 EndFunc   ;==>_CheckForUpdate
-
 ; Vergleicht zwei Versionsstrings à la "7.1.0.2" nummerisch, Teil fuer Teil.
 ; Rueckgabe: 1 wenn $sA neuer, -1 wenn $sA aelter, 0 wenn gleich.
 Func _CompareVersion($sA, $sB)
@@ -1703,7 +1557,6 @@ Func _CompareVersion($sA, $sB)
 	Next
 	Return 0
 EndFunc   ;==>_CompareVersion
-
 Func _Get7zrURL()
 	Local $sAPI = "https://api.github.com/repos/ip7z/7zip/releases/latest"
 	Local $sJSON = BinaryToString(InetRead($sAPI, 1))
@@ -1713,7 +1566,6 @@ Func _Get7zrURL()
 	Local $sVer = StringReplace($sTag, ".", "")
 	Return "https://github.com/ip7z/7zip/releases/download/" & $sTag & "/7zr.exe"
 EndFunc   ;==>_Get7zrURL
-
 ; ------------------------------------------------------------
 ;  True for any suno.com/suno.ai link that isn't already
 ;  a direct cdn url.
@@ -1721,7 +1573,6 @@ EndFunc   ;==>_Get7zrURL
 Func _IsSunoURL($sURL)
 	Return StringRegExp($sURL, "(?i)^https?://(www\.)?suno\.(com|ai)/")
 EndFunc   ;==>_IsSunoURL
-
 ; ------------------------------------------------------------
 ;  Pull the clip uuid out of a suno.com/song/<uuid> (or any
 ;  other suno url shape that carries the uuid directly).
@@ -1731,7 +1582,6 @@ Func _SunoClipId($sURL)
 	If IsArray($aM) Then Return $aM[0]
 	Return ""
 EndFunc   ;==>_SunoClipId
-
 ; ------------------------------------------------------------
 ;  suno.com/song/<uuid>  ->  https://cdn1.suno.ai/<uuid>.mp4
 ;  Returns the original url unchanged if no id is found (e.g.
@@ -1743,3 +1593,30 @@ Func _SunoRewriteURL($sURL)
 	If $sId = "" Then Return $sURL
 	Return "https://cdn1.suno.ai/" & $sId & ".mp4"
 EndFunc   ;==>_SunoRewriteURL
+; ------------------------------------------------------------
+;  Der Songname steht NICHT auf der suno.com-Seite selbst drin
+;  (die rendert alles per JS), sondern kommt sauber als JSON von
+;  Sunos eigener Clip-API - kein IE/WebView noetig, ganz normaler
+;  InetRead genau wie bei _Get7zrURL() weiter oben.
+;  Gibt "" zurueck wenn was schiefgeht (kein Internet, 404, ...).
+; ------------------------------------------------------------
+Func _SunoClipTitle($sId)
+	If $sId = "" Then Return ""
+	Local $sAPI = "https://studio-api.prod.suno.com/api/clip/" & $sId
+	Local $bData = InetRead($sAPI, 1)
+	If @error Then Return ""
+	Local $sJSON = BinaryToString($bData, 4)
+	Local $aTitle = StringRegExp($sJSON, '"title"\s*:\s*"((?:[^"\\]|\\.)*)"', 1)
+	If @error Or UBound($aTitle) < 1 Then Return ""
+	Local $sTitle = StringRegExpReplace($aTitle[0], '\\(.)', '$1')
+	Return _SanitizeFilename($sTitle)
+EndFunc   ;==>_SunoClipTitle
+; ------------------------------------------------------------
+;  Titel Suno/allgemein tauglich fuer Windows-Dateinamen machen.
+; ------------------------------------------------------------
+Func _SanitizeFilename($sName)
+	$sName = StringStripWS($sName, 3)
+	$sName = StringRegExpReplace($sName, '[\\/:*?"<>|]', "_")
+	If $sName = "" Then Return "suno_track"
+	Return $sName
+EndFunc   ;==>_SanitizeFilename
