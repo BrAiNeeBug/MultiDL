@@ -17,7 +17,6 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 - **CMD window toggle** — optionally show the yt-dlp console for debugging
 - **One-click updater** — updates yt-dlp and ffmpeg to latest versions
 - **Auto install** — downloads and installs yt-dlp + ffmpeg + deno automatically on first run
-- **Suno single-song download** — paste a `suno.com/song/<id>` link, gets rewritten to the direct CDN file and saved under its real song title
 - **Wine compatible** — runs on Linux under Wine without native tools
 
 ---
