@@ -17,6 +17,7 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 - **CMD window toggle** — optionally show the yt-dlp console for debugging
 - **One-click updater** — updates yt-dlp and ffmpeg to latest versions
 - **Auto install** — downloads and installs yt-dlp + ffmpeg + deno automatically on first run
+- **Suno single-song download** — paste a `suno.com/song/<id>` link, gets rewritten to the direct CDN file and saved under its real song title
 - **Wine compatible** — runs on Linux under Wine without native tools
 
 ---
@@ -41,6 +42,14 @@ Click **LIVE** in the title bar to switch to Live View mode.
 4. Click **Stop** to cancel, click **LIVE** again to return to normal mode
 
 > The file `_watch_live.mp4` stays in the downloads folder after watching. It gets overwritten on the next Live session. Rename it if you want to keep it.
+
+---
+
+## Suno
+
+Single songs (`suno.com/song/<id>`) work like any other link — Video/Audio, Live View, all of it.
+
+**Not supported on purpose:** Suno playlists / batch-downloading multiple songs at once. This is a deliberate limitation, not a bug — only single-song links are handled.
 
 ---
 
@@ -90,6 +99,8 @@ yt-dlp and ffmpeg are Windows binaries — no native Linux tools needed.
 - [AutoIt v3](https://www.autoitscript.com/) — GUI and scripting
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — video/audio downloading
 - [ffmpeg](https://ffmpeg.org/) — merging and audio conversion
+- [deno](https://github.com/denoland/deno) — JS runtime yt-dlp needs for some extractors
+- [7-Zip](https://github.com/ip7z/7zip) — temporary unpacking on Wine/Linux
 
 ---
 
