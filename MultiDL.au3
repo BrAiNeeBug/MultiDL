@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.2.0.1
+#AutoIt3Wrapper_Res_Fileversion=8.2.0.2
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -50,7 +50,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.2.0.1"
+Global Const $APP_VERSION = "8.2.0.2"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -320,6 +320,7 @@ EndIf
 Global $BP_fQuit = False, $BP_hVid = 0, $BP_fFull = (IniRead($BP_sIni, "player", "full", "1") = "1"), $BP_fVidShown = False, $BP_sPos = "", $BP_sWin = "", $BP_iSty = 0, $BP_iMon = 0, $BP_fWFS = False, $BP_fClick = (IniRead($BP_sIni, "video", "clickmode", "1") = "1"), $BP_tChg = 0, $BP_bDown = False, $BP_tPoll = 0
 Global $BP_iZoom = 100, $BP_tNote = 0, $BP_hOsd = 0, $BP_lblOsd = 0, $BP_tOsd = 0, $BP_iOsdMs = 3000, $BP_fWK = False
 Global $BP_fCurOn = True, $BP_iMx = -1, $BP_iMy = -1, $BP_tMouse = 0, $BP_fAwake = False
+Global $BP_iFill = 0, $BP_iFillLog = 0
 Global $BP_oWMP = 0, $BP_idWMP = 0, $BP_fWmp = False, $BP_iWInit = 0
 $BP_hMain = $hGUI
 $BP_fTray = False
@@ -1960,6 +1961,13 @@ Func BP_Play($i)
 	Local $ok = BP_Open($BP_aPl[$i])
 	If Not $ok And StringRight($BP_aPl[$i], 4) = ".mp3" Then $ok = BP_Retry($i)
 	$BP_iCur = $i
+	If $BP_aLn[$i] <= 0 Then
+		Local $bpL = BP_MP3_GetLengthSec($BP_aPl[$i])
+		If $bpL > 0 Then
+			$BP_aLn[$i] = $bpL
+			BP_ItemSet($i)
+		EndIf
+	EndIf
 	$BP_iLen = $BP_aLn[$i] ; Explorer length (same as in the list); MCI's own length is only an estimate for many mp3s
 	If $BP_iLen <= 0 Then $BP_iLen = Number(BP_Mci("status bp length")) / 1000
 	$BP_tCmd = TimerInit()
@@ -2149,6 +2157,7 @@ Func BP_Tick()
 		$BP_tNote = 0
 		GUICtrlSetData($BP_lblNow, $BP_fPlay ? $BP_sNow : "stopped")
 	EndIf
+	BP_FillLen()
 	If Not $BP_fPlay Or $BP_fPause Then Return
 	Local $m, $ended
 	If $BP_fWmp Then ; playState: 3 playing, 2 paused, 6/7/9 loading, 8 ended, 1 stopped, 10 ready
@@ -2387,10 +2396,13 @@ Func BP_GG($t, $bit) ; 8 bits at bit offset
 EndFunc   ;==>BP_GG
 ; ================= playlist =================
 Func BP_Add($f, $l = 0) ; $l = known length in seconds (skips the Explorer lookup)
+	$f = BP_Norm($f)
 	If StringInStr(FileGetAttrib($f), "D") Then Return BP_AddDir($f)
 	If Not StringRegExp($f, "(?i)\.(" & $BP_sExt & ")$") Or Not FileExists($f) Then Return
 	_ArrayAdd($BP_aPl, $f)
-	_ArrayAdd($BP_aLn, $l > 0 ? $l : BP_MP3_GetLengthSec($f))
+	Local $bpLn = $l > 0 ? $l : BP_MP3_GetLengthSec($f)
+	If $bpLn <= 0 Then $BP_iFill = 0
+	_ArrayAdd($BP_aLn, $bpLn)
 	GUICtrlSetData($BP_lst, BP_Item(UBound($BP_aPl) - 1))
 	BP_PLText()
 EndFunc   ;==>BP_Add
@@ -2415,7 +2427,7 @@ Func BP_LoadDL() ; put the download folder into the playlist (only files that ar
 			$f = FileFindNextFile($h)
 			If @error Then ExitLoop
 			If StringLeft($f, 1) = "_" Then ContinueLoop
-			$p = $DL_DIR & "\" & $f
+			$p = BP_Norm($DL_DIR & "\" & $f)
 			$bHave = False
 			For $n = 0 To UBound($BP_aPl) - 1
 				If StringLower($BP_aPl[$n]) = StringLower($p) Then
@@ -2456,6 +2468,42 @@ Func BP_Refresh()
 	If $BP_iCur >= 0 Then GUICtrlSendMsg($BP_lst, $LB_SETCURSEL, $BP_iCur, 0)
 	BP_PLText()
 EndFunc   ;==>BP_Refresh
+Func BP_Norm($p) ; D:\\folder\file -> D:\folder\file (happens when the exe sits in the root of a drive); a leading \\ (UNC) stays
+	Local $pre = (StringLeft($p, 2) = "\\") ? "\\" : ""
+	$p = StringTrimLeft($p, StringLen($pre))
+	While StringInStr($p, "\\")
+		$p = StringReplace($p, "\\", "\")
+	WEnd
+	Return $pre & $p
+EndFunc   ;==>BP_Norm
+Func BP_ItemSet($i) ; update one list line in place (keeps scroll position and selection)
+	Local $t = BP_Item($i), $w = DllStructCreate("wchar[" & StringLen($t) + 1 & "]")
+	DllStructSetData($w, 1, $t)
+	Local $top = GUICtrlSendMsg($BP_lst, 0x018E, 0, 0), $sel = GUICtrlSendMsg($BP_lst, $LB_GETCURSEL, 0, 0) ; LB_GETTOPINDEX
+	GUICtrlSendMsg($BP_lst, 0x0182, $i, 0) ; LB_DELETESTRING
+	GUICtrlSendMsg($BP_lst, 0x0181, $i, DllStructGetPtr($w)) ; LB_INSERTSTRING
+	GUICtrlSendMsg($BP_lst, 0x0197, $top, 0) ; LB_SETTOPINDEX
+	If $sel >= 0 Then GUICtrlSendMsg($BP_lst, $LB_SETCURSEL, $sel, 0)
+EndFunc   ;==>BP_ItemSet
+Func BP_FillLen() ; tracks that came in without a length: look it up a few per tick, one pass through the list
+	Local $n = UBound($BP_aPl), $c = 0, $l
+	While $BP_iFill < $n And $c < 3
+		If $BP_aLn[$BP_iFill] <= 0 Then
+			$c += 1
+			$l = BP_MP3_GetLengthSec($BP_aPl[$BP_iFill])
+			If $l <= 0 And $BP_iFillLog < 5 Then
+				$BP_iFillLog += 1
+				BP_Log("length lookup failed: " & $BP_aPl[$BP_iFill])
+			EndIf
+			If $l > 0 Then
+				$BP_aLn[$BP_iFill] = $l
+				BP_ItemSet($BP_iFill)
+				If $BP_iFill = $BP_iCur And $BP_iLen <= 0 Then $BP_iLen = $l
+			EndIf
+		EndIf
+		$BP_iFill += 1
+	WEnd
+EndFunc   ;==>BP_FillLen
 Func BP_Item($i)
 	Return StringFormat("%02d  %s   [%s]", $i + 1, BP_Name($BP_aPl[$i]), BP_T($BP_aLn[$i]))
 EndFunc   ;==>BP_Item
@@ -3008,10 +3056,16 @@ Func BP_MP3_GetLengthSec($sFile)
 	If Not IsObj($oFolder) Then Return 0
 	Local $oFile = $oFolder.ParseName($sName)
 	If Not IsObj($oFile) Then Return 0
-	Local $sTime = StringRegExpReplace($oFolder.GetDetailsOf($oFile, 27), "[^\d:]", "") ; strip hidden unicode marks
-	If $sTime = "" Then Return 0
-	Local $a = StringSplit($sTime, ":")
-	Return ($a[0] = 2) ? ($a[1] * 60 + $a[2]) : (($a[0] = 3) ? ($a[1] * 3600 + $a[2] * 60 + $a[3]) : 0)
+	Local $r = 0, $sTime = StringRegExpReplace($oFolder.GetDetailsOf($oFile, 27), "[^\d:]", "") ; strip hidden unicode marks
+	If $sTime <> "" Then
+		Local $a = StringSplit($sTime, ":")
+		$r = ($a[0] = 2) ? ($a[1] * 60 + $a[2]) : (($a[0] = 3) ? ($a[1] * 3600 + $a[2] * 60 + $a[3]) : 0)
+	EndIf
+	If $r <= 0 Then ; column 27 is not "Length" in every folder view -> ask the property itself (100 ns units, language independent)
+		Local $v = Number($oFile.ExtendedProperty("System.Media.Duration"))
+		If $v > 0 Then $r = Round($v / 10000000)
+	EndIf
+	Return $r
 EndFunc   ;==>BP_MP3_GetLengthSec
 ; ================= current BrAiNPlay helpers =================
 Func BP_B($t, $x, $y, $w, $h, $c, $fs = 11)
