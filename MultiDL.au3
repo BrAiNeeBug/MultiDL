@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.2.0.2
+#AutoIt3Wrapper_Res_Fileversion=8.2.0.3
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -50,7 +50,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.2.0.2"
+Global Const $APP_VERSION = "8.2.0.3"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -349,6 +349,8 @@ Global $BP_bStop = BP_B("■", 206, 154, 70, 36, $BP_TXT, 10)
 Global $BP_bNext = BP_B(">|", 282, 154, 70, 36, $BP_TXT, 9)
 Global $BP_bShuf = BP_B("SHUF", 358, 154, 86, 36, $BP_TXT, 8)
 Global $BP_bLoop = BP_B("LOOP", 450, 154, 86, 36, $BP_TXT, 8)
+GUICtrlSetColor($BP_bShuf, $BP_fShuf ? $BP_ACC : $BP_OFF) ; restore the saved state colors
+GUICtrlSetColor($BP_bLoop, $BP_fLoop ? $BP_ACC : $BP_OFF)
 Global $BP_lblVol = GUICtrlCreateLabel("VOL", 24, 200, 60, 20, $SS_CENTERIMAGE)
 GUICtrlSetColor($BP_lblVol, $BP_TXT)
 Global $BP_lblBal = GUICtrlCreateLabel("BAL C", 250, 200, 70, 20, $SS_CENTERIMAGE)
