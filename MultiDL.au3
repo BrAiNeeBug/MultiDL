@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.2.0.0
+#AutoIt3Wrapper_Res_Fileversion=8.2.0.1
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -50,7 +50,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.2.0.0"
+Global Const $APP_VERSION = "8.2.0.1"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -342,13 +342,12 @@ For $i = 0 To $BP_N - 1
 	$BP_aSeg[$i] = GUICtrlCreateLabel("", 24 + $i * 11, 102 - Int($bpH / 2), 7, $bpH)
 	GUICtrlSetBkColor($BP_aSeg[$i], $BP_DIM)
 Next
-Global $BP_bPrev = BP_B("|<", 24, 154, 58, 36, $BP_TXT, 9)
-Global $BP_bPlay = BP_B(ChrW(9654), 88, 154, 90, 36, $BP_TXT, 11)
-Global $BP_bStop = BP_B("■", 178, 154, 58, 36, $BP_TXT, 10)
-Global $BP_bNext = BP_B(">|", 242, 154, 58, 36, $BP_TXT, 9)
-Global $BP_bShuf = BP_B("SHUF", 306, 154, 70, 36, $BP_TXT, 8)
-Global $BP_bLoop = BP_B("LOOP", 382, 154, 70, 36, $BP_TXT, 8)
-Global $BP_bAddF = BP_B("+ FILES", 458, 154, 78, 36, $BP_TXT, 8)
+Global $BP_bPrev = BP_B("|<", 24, 154, 70, 36, $BP_TXT, 9)
+Global $BP_bPlay = BP_B(ChrW(9654), 100, 154, 100, 36, $BP_TXT, 11)
+Global $BP_bStop = BP_B("■", 206, 154, 70, 36, $BP_TXT, 10)
+Global $BP_bNext = BP_B(">|", 282, 154, 70, 36, $BP_TXT, 9)
+Global $BP_bShuf = BP_B("SHUF", 358, 154, 86, 36, $BP_TXT, 8)
+Global $BP_bLoop = BP_B("LOOP", 450, 154, 86, 36, $BP_TXT, 8)
 Global $BP_lblVol = GUICtrlCreateLabel("VOL", 24, 200, 60, 20, $SS_CENTERIMAGE)
 GUICtrlSetColor($BP_lblVol, $BP_TXT)
 Global $BP_lblBal = GUICtrlCreateLabel("BAL C", 250, 200, 70, 20, $SS_CENTERIMAGE)
@@ -387,7 +386,7 @@ Func BP_Keys($on) ; player keys only active in player mode, otherwise they eat l
 		GUISetAccelerators(0, $hGUI)
 	EndIf
 EndFunc   ;==>BP_Keys
-Global $BP_aControls[20] = [$BP_bTV, $BP_lblNow, $BP_lblTime, $BP_bPrev, $BP_bPlay, $BP_bStop, $BP_bNext, $BP_bShuf, $BP_bLoop, $BP_bAddF, $BP_lblVol, $BP_lblBal, $BP_bPL, $BP_lst, $BP_bAddD, $BP_bDel, $BP_bClr, $BP_bSave, $BP_bLoad, $BP_bAddFile]
+Global $BP_aControls[19] = [$BP_bTV, $BP_lblNow, $BP_lblTime, $BP_bPrev, $BP_bPlay, $BP_bStop, $BP_bNext, $BP_bShuf, $BP_bLoop, $BP_lblVol, $BP_lblBal, $BP_bPL, $BP_lst, $BP_bAddD, $BP_bDel, $BP_bClr, $BP_bSave, $BP_bLoad, $BP_bAddFile]
 ; OSD window used by current BrAiNPlay.
 $BP_hOsd = GUICreate("", 400, 40, 0, 0, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW, $WS_EX_NOACTIVATE), $hGUI)
 GUISetBkColor($BP_BG, $BP_hOsd)
@@ -589,7 +588,7 @@ While 1
 				$BP_fLoop = Not $BP_fLoop
 				GUICtrlSetColor($BP_bLoop, $BP_fLoop ? $BP_ACC : $BP_OFF)
 			EndIf
-		Case $iMsg = $BP_bAddF
+		Case $iMsg = $BP_bAddFile
 			If $BP_bPlayerMode Then
 				Local $bpFiles = FileOpenDialog("Add files", "", "Media (*.mp3;*.wav;*.wma;*.mp4;*.m4v;*.avi;*.wmv;*.mpg;*.mpeg;*.mov;*.mkv;*.webm)", 5)
 				If Not @error Then
@@ -629,11 +628,6 @@ While 1
 			If $BP_bPlayerMode Then
 				Local $bpSel = GUICtrlSendMsg($BP_lst, $LB_GETCURSEL, 0, 0)
 				If $bpSel >= 0 And ($bpSel <> $BP_iCur Or Not $BP_fPlay) Then BP_Play($bpSel)
-			EndIf
-		Case $iMsg = $BP_bAddFile
-			If $BP_bPlayerMode Then
-				Local $bpOne = FileOpenDialog("Add file", "", "Media (*.mp3;*.wav;*.wma;*.mp4;*.m4v;*.avi;*.wmv;*.mpg;*.mpeg;*.mov;*.mkv;*.webm)", 1)
-				If Not @error Then BP_Add($bpOne)
 			EndIf
 			; ---- Live Start/Stop ----
 		Case $iMsg = $hLiveBtnStart
