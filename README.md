@@ -1,15 +1,17 @@
-# BrAiNee's MultiDL v8.1.0.0 (27.09.2026)
+# BrAiNee's MultiDL v8.2.0.0 (08.10.2026)
 
-A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ffmpeg** — built in AutoIt, with full **Wine on Linux** compatibility.
+A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ffmpeg** — now with a built-in media player (**BrAiNPlay**). Built in AutoIt, with **Wine on Linux** compatibility for the downloader.
 
 ---
 
 ## Features
 
+### Downloader
+
 - **Video download** — best quality MP4 (bestvideo + bestaudio, ffmpeg merge)
 - **Audio download** — best quality MP3 extraction via ffmpeg
+- **Live View** — watch a video *while* it downloads
 - **Playlist mode** — download entire playlists or single files
-- **Live View** — watch a video in your default player *while* it downloads
 - **Auto URL cleanup** — strips playlist parameters from single-video links
 - **Start / Stop toggle** — cancel any running download at any time
 - **PasteStart** — paste URL from clipboard and start immediately
@@ -17,7 +19,18 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 - **CMD window toggle** — optionally show the yt-dlp console for debugging
 - **One-click updater** — updates yt-dlp and ffmpeg to latest versions
 - **Auto install** — downloads and installs yt-dlp + ffmpeg + deno automatically on first run
-- **Wine compatible** — runs on Linux under Wine without native tools
+
+### Built-in player (BrAiNPlay)
+
+- **Plays everything you download** — audio and video, opened with the player button in the title bar
+- **Download folder as playlist** — `MultiDL-Downloads` is loaded into the playlist every time the player opens (files already in the list are not added twice)
+- **Click-to-seek waveform** — the waveform reflects the actual track; click it to jump anywhere
+- **Volume and balance** — draggable sliders, remembered between sessions
+- **Playlist tools** — add files, add folder, remove, clear, save and load as `.m3u`; the last playlist is autosaved
+- **Shuffle and loop**
+- **Video support** — fullscreen on the active monitor, or a window at video size; the TV button toggles the video window
+- **Keyboard and media keys** — see the shortcut table below
+- **Minimize to tray** — the player keeps playing in the background, the tray tooltip shows the current track
 
 ---
 
@@ -26,21 +39,52 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 ### Normal Download
 
 1. Paste a URL into the input field (or use **PasteStart**)
-2. Choose format: **Video (MP4)** or **Audio (MP3)**
-3. Choose mode: **Single** or **Playlist**
+2. Choose the format: **Video (MP4)**, **Audio (MP3)** or **Live**
+3. Choose the mode: **Single** or **Playlist**
 4. Click **Start** — progress bar and status update live
 5. Click **> Play last File** when done, or **[>] View Downloads** to open the folder
 
 ### Live View
 
-Click **LIVE** in the title bar to switch to Live View mode.
+Select **Live** in the Format row.
 
-1. Paste a URL into the Live URL field (or use **PasteStart**)
-2. Click **Start Live**
-3. MultiDL downloads the video as `_watch_live.mp4` and opens it in your default player automatically — the file grows as it downloads
-4. Click **Stop** to cancel, click **LIVE** again to return to normal mode
+1. Paste a URL into the input field (or use **PasteStart**)
+2. Click **Start**
+3. MultiDL downloads the video as `_watch_live.mp4` while you watch — the file grows as it downloads
+4. Click **Stop** to cancel, select **Video** or **Audio** again to return to normal downloads
 
-> The file `_watch_live.mp4` stays in the downloads folder after watching. It gets overwritten on the next Live session. Rename it if you want to keep it.
+The format can't be changed while a live stream is running.
+
+> The file `_watch_live.mp4` stays in the downloads folder after watching. It gets overwritten on the next Live session. Rename it if you want to keep it. Files starting with `_` are not added to the player playlist.
+
+### Player
+
+Click the **play button** in the title bar to switch between the downloader and the player.
+
+- Click the **waveform** to seek, drag the **VOL** and **BAL** bars to change volume and balance
+- Click a track in the playlist to play it
+- Click the **–** button in the title bar to hide the window in the tray, a single click on the tray icon brings it back (to quit, restore the window first and use the **x** button)
+
+#### Keyboard shortcuts (player mode)
+
+| Key | Action |
+|---|---|
+| `Space` | Play / pause |
+| `S` | Stop |
+| `N` / `P` | Next / previous track |
+| `←` / `→` | Seek 10 seconds back / forward |
+| `Ctrl+↑` / `Ctrl+↓` | Volume up / down |
+| `M` | Mute |
+| `Del` | Remove selected track from the playlist |
+| `V` | Show / hide the video window |
+| `F` | Fullscreen |
+| `W` | Window mode (video size) |
+| `Esc` | Leave fullscreen |
+| `+` / `-` / `0` | Zoom in / out / reset (video) |
+| `A` | Switch audio track |
+| `D` | Move video to the next monitor |
+
+The multimedia keys (play/pause, next, previous) work as well. The shortcuts are only active in player mode, so they never interfere with typing in the URL field.
 
 ---
 
@@ -79,6 +123,10 @@ bin\
 MultiDL-Downloads\
     *.mp4 / *.mp3
     _watch_live.mp4
+
+%AppData%\BrAiNPlay\
+    brainplay.ini       (player settings: volume, balance, shuffle, loop, video mode)
+    last.m3u            (autosaved playlist)
 ```
 
 ---
@@ -93,6 +141,8 @@ wine MultiDL.exe
 
 yt-dlp and ffmpeg are Windows binaries — no native Linux tools needed.
 
+The player uses the Windows multimedia engine (MCI) and, for video formats MCI can't open, the Windows Media Player component. Under Wine, playback of some video formats may therefore be limited.
+
 ---
 
 ## Built With
@@ -102,6 +152,7 @@ yt-dlp and ffmpeg are Windows binaries — no native Linux tools needed.
 - [ffmpeg](https://ffmpeg.org/) — merging and audio conversion
 - [deno](https://github.com/denoland/deno) — JS runtime yt-dlp needs for some extractors
 - [7-Zip](https://github.com/ip7z/7zip) — temporary unpacking on Wine/Linux
+- [BrAiNPlay](https://www.autoitscript.com/forum/topic/213899-brainplay-intuitiveplayer/) — the built-in player
 
 ---
 
