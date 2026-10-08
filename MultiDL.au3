@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.2.0.3
+#AutoIt3Wrapper_Res_Fileversion=8.2.0.4
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -50,7 +50,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.2.0.3"
+Global Const $APP_VERSION = "8.2.0.4"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -301,7 +301,7 @@ GUICtrlSetState($hLiveProgBar, $GUI_HIDE)
 ; ---- BrAiNPlay test integration --------------------------------
 ; Same MultiDL window/style, native MCI first + WMP video fallback.
 ; ============================================================
-Global Const $BP_BG = $CLR_BG, $BP_PNL = $CLR_PANEL, $BP_DIM = 0x2A2A2A, $BP_OFF = $CLR_MUTED, $BP_ACC = $CLR_ACCENT, $BP_TXT = $CLR_TEXT, $BP_N = 40
+Global Const $BP_BG = $CLR_BG, $BP_PNL = $CLR_PANEL, $BP_DIM = 0x2A2A2A, $BP_OFF = $CLR_MUTED, $BP_ACC = $CLR_ACCENT, $BP_TXT = $CLR_TEXT, $BP_N = 46, $BP_WY = 116, $BP_WA = 58
 Global Const $BP_VX = 90, $BP_VW = 140, $BP_BX = 325, $BP_BW = 130, $BP_NV = 14, $BP_NB = 13
 Global $BP_sApp = @AppDataDir & "\BrAiNPlay", $BP_sIni = $BP_sApp & "\brainplay.ini", $BP_sLast = $BP_sApp & "\last.m3u"
 DirCreate($BP_sApp)
@@ -334,47 +334,47 @@ Global $BP_bTV = BP_B(" TV ", 474, 48, 62, 24, $BP_TXT, 9)
 Global $BP_lblNow = GUICtrlCreateLabel("stopped", 24, 54, 440, 20)
 GUICtrlSetColor($BP_lblNow, $BP_TXT)
 GUICtrlSetFont($BP_lblNow, 9, 600, 0, "Segoe UI")
-Global $BP_lblTime = GUICtrlCreateLabel("00:00 / --:--", 24, 126, 512, 20, $SS_CENTER)
+Global $BP_lblTime = GUICtrlCreateLabel("00:00 / --:--", 24, 156, 512, 20, $SS_CENTER)
 GUICtrlSetColor($BP_lblTime, $BP_ACC)
 GUICtrlSetFont($BP_lblTime, 10, 700, 0, "Segoe UI")
 Local $bpH
 For $i = 0 To $BP_N - 1
 	$bpH = BP_Def($i)
-	$BP_aSeg[$i] = GUICtrlCreateLabel("", 24 + $i * 11, 102 - Int($bpH / 2), 7, $bpH)
+	$BP_aSeg[$i] = GUICtrlCreateLabel("", BP_SegX($i), $BP_WY - Int($bpH / 2), 7, $bpH)
 	GUICtrlSetBkColor($BP_aSeg[$i], $BP_DIM)
 Next
-Global $BP_bPrev = BP_B("|<", 24, 154, 70, 36, $BP_TXT, 9)
-Global $BP_bPlay = BP_B(ChrW(9654), 100, 154, 100, 36, $BP_TXT, 11)
-Global $BP_bStop = BP_B("■", 206, 154, 70, 36, $BP_TXT, 10)
-Global $BP_bNext = BP_B(">|", 282, 154, 70, 36, $BP_TXT, 9)
-Global $BP_bShuf = BP_B("SHUF", 358, 154, 86, 36, $BP_TXT, 8)
-Global $BP_bLoop = BP_B("LOOP", 450, 154, 86, 36, $BP_TXT, 8)
+Global $BP_bPrev = BP_B("|<", 24, 184, 70, 36, $BP_TXT, 9)
+Global $BP_bPlay = BP_B(ChrW(9654), 100, 184, 100, 36, $BP_TXT, 11)
+Global $BP_bStop = BP_B("■", 206, 184, 70, 36, $BP_TXT, 10)
+Global $BP_bNext = BP_B(">|", 282, 184, 70, 36, $BP_TXT, 9)
+Global $BP_bShuf = BP_B("SHUF", 358, 184, 86, 36, $BP_TXT, 8)
+Global $BP_bLoop = BP_B("LOOP", 450, 184, 86, 36, $BP_TXT, 8)
 GUICtrlSetColor($BP_bShuf, $BP_fShuf ? $BP_ACC : $BP_OFF) ; restore the saved state colors
 GUICtrlSetColor($BP_bLoop, $BP_fLoop ? $BP_ACC : $BP_OFF)
-Global $BP_lblVol = GUICtrlCreateLabel("VOL", 24, 200, 60, 20, $SS_CENTERIMAGE)
+Global $BP_lblVol = GUICtrlCreateLabel("VOL", 24, 230, 60, 20, $SS_CENTERIMAGE)
 GUICtrlSetColor($BP_lblVol, $BP_TXT)
-Global $BP_lblBal = GUICtrlCreateLabel("BAL C", 250, 200, 70, 20, $SS_CENTERIMAGE)
+Global $BP_lblBal = GUICtrlCreateLabel("BAL C", 250, 230, 70, 20, $SS_CENTERIMAGE)
 GUICtrlSetColor($BP_lblBal, $BP_TXT)
 For $i = 0 To $BP_NV - 1
 	$bpH = 6 + $i
-	$BP_aV[$i] = GUICtrlCreateLabel("", $BP_VX + $i * 10, 222 - $bpH, 8, $bpH)
+	$BP_aV[$i] = GUICtrlCreateLabel("", $BP_VX + $i * 10, 252 - $bpH, 8, $bpH)
 Next
 For $i = 0 To $BP_NB - 1
 	$bpH = ($i = 6) ? 22 : 12
-	$BP_aB[$i] = GUICtrlCreateLabel("", $BP_BX + $i * 10, 211 - Int($bpH / 2), 8, $bpH)
+	$BP_aB[$i] = GUICtrlCreateLabel("", $BP_BX + $i * 10, 241 - Int($bpH / 2), 8, $bpH)
 Next
-Global $BP_bPL = BP_B("PLAYLIST", 24, 236, 512, 22, $BP_TXT, 8)
+Global $BP_bPL = BP_B("PLAYLIST", 24, 266, 512, 22, $BP_TXT, 8)
 GUICtrlSetState($BP_bPL, $GUI_DROPACCEPTED)
-Global $BP_lst = GUICtrlCreateList("", 24, 264, 512, 160, BitOR($LBS_NOTIFY, $WS_VSCROLL))
+Global $BP_lst = GUICtrlCreateList("", 24, 294, 512, 160, BitOR($LBS_NOTIFY, $WS_VSCROLL))
 GUICtrlSetBkColor($BP_lst, $BP_PNL)
 GUICtrlSetColor($BP_lst, $BP_TXT)
 GUICtrlSetState($BP_lst, $GUI_DROPACCEPTED)
-Global $BP_bAddFile = BP_B("+ FILES", 24, 432, 80, 34, $BP_TXT, 8)
-Global $BP_bAddD = BP_B("+ FOLDER", 108, 432, 80, 34, $BP_TXT, 8)
-Global $BP_bDel = BP_B("REMOVE", 192, 432, 80, 34, $BP_TXT, 8)
-Global $BP_bClr = BP_B("CLEAR", 276, 432, 80, 34, $BP_TXT, 8)
-Global $BP_bSave = BP_B("SAVE", 360, 432, 80, 34, $BP_TXT, 8)
-Global $BP_bLoad = BP_B("LOAD", 444, 432, 92, 34, $BP_TXT, 8)
+Global $BP_bAddFile = BP_B("+ FILES", 24, 462, 80, 34, $BP_TXT, 8)
+Global $BP_bAddD = BP_B("+ FOLDER", 108, 462, 80, 34, $BP_TXT, 8)
+Global $BP_bDel = BP_B("REMOVE", 192, 462, 80, 34, $BP_TXT, 8)
+Global $BP_bClr = BP_B("CLEAR", 276, 462, 80, 34, $BP_TXT, 8)
+Global $BP_bSave = BP_B("SAVE", 360, 462, 80, 34, $BP_TXT, 8)
+Global $BP_bLoad = BP_B("LOAD", 444, 462, 92, 34, $BP_TXT, 8)
 ; Current BrAiNPlay keyboard map, via dummies so the MultiDL event loop stays in control.
 Global $BP_kPlay = GUICtrlCreateDummy(), $BP_kStop = GUICtrlCreateDummy(), $BP_kNext = GUICtrlCreateDummy(), $BP_kPrev = GUICtrlCreateDummy()
 Global $BP_kBack = GUICtrlCreateDummy(), $BP_kFwd = GUICtrlCreateDummy(), $BP_kVU = GUICtrlCreateDummy(), $BP_kVD = GUICtrlCreateDummy()
@@ -462,9 +462,9 @@ While 1
 			If $BP_bPlayerMode Then
 				Local $bpCInfo = GUIGetCursorInfo($hGUI)
 				If IsArray($bpCInfo) Then
-					If $bpCInfo[1] >= 70 And $bpCInfo[1] <= 120 And $bpCInfo[0] >= 20 And $bpCInfo[0] <= 460 Then
-						BP_Seek(($bpCInfo[0] - 20) / 440)
-					ElseIf $bpCInfo[1] >= 195 And $bpCInfo[1] <= 230 Then
+					If $bpCInfo[1] >= 76 And $bpCInfo[1] <= 152 And $bpCInfo[0] >= 20 And $bpCInfo[0] <= 540 Then
+						BP_Seek(_Min(_Max(($bpCInfo[0] - 24) / 512, 0), 0.999))
+					ElseIf $bpCInfo[1] >= 225 And $bpCInfo[1] <= 260 Then
 						If $bpCInfo[0] >= $BP_VX - 6 And $bpCInfo[0] <= $BP_VX + $BP_VW + 6 Then $BP_iDrag = 1
 						If $bpCInfo[0] >= $BP_BX - 6 And $bpCInfo[0] <= $BP_BX + $BP_BW + 6 Then $BP_iDrag = 2
 					EndIf
@@ -2270,16 +2270,19 @@ Func BP_Apply()
 EndFunc   ;==>BP_Apply
 ; ================= waveform from the file =================
 ; wav: real amplitude | mp3: loudness estimated from the frames' global_gain (no decoding) | else: default pattern
+Func BP_SegX($i) ; bars spread over the full width 24..536
+	Return 24 + Round($i * 505 / ($BP_N - 1))
+EndFunc   ;==>BP_SegX
 Func BP_Def($i)
-	Return 8 + Int(Abs(Sin($i * 0.55) * Cos($i * 0.21)) * 34)
+	Return 8 + Int(Abs(Sin($i * 0.55) * Cos($i * 0.21)) * $BP_WA)
 EndFunc   ;==>BP_Def
 Func BP_Wave($f)
 	Local $v[$BP_N], $ok = False, $e = StringLower(StringRight($f, 4)), $m
 	If $e = ".wav" Then $ok = BP_WavEnv($f, $v)
 	If $e = ".mp3" Then $ok = BP_Mp3Env($f, $v)
 	For $i = 0 To $BP_N - 1
-		$m = $ok ? 8 + Int($v[$i] * 34) : BP_Def($i)
-		GUICtrlSetPos($BP_aSeg[$i], 24 + $i * 11, 102 - Int($m / 2), 7, $m)
+		$m = $ok ? 8 + Int($v[$i] * $BP_WA) : BP_Def($i)
+		GUICtrlSetPos($BP_aSeg[$i], BP_SegX($i), $BP_WY - Int($m / 2), 7, $m)
 	Next
 EndFunc   ;==>BP_Wave
 Func BP_WavEnv($f, ByRef $v) ; 16-bit PCM only, fills $v with 0..1
