@@ -1,4 +1,4 @@
-# BrAiNee's MultiDL v8.2.0.5 (09.10.2026)
+# BrAiNee's MultiDL v8.2.0.0 (08.10.2026)
 
 A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ffmpeg** — now with a built-in media player (**BrAiNPlay**). Built in AutoIt, with **Wine on Linux** compatibility for the downloader.
 
@@ -28,7 +28,7 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 - **Volume and balance** — draggable sliders, remembered between sessions
 - **Playlist tools** — add files, add folder, remove, clear, save and load as `.m3u`; the last playlist is autosaved
 - **Shuffle and loop**
-- **Video support** — fullscreen on the active monitor, or a window at video size; the TV button toggles the video window
+- **Video support** — fullscreen on the active monitor, or a window at video size; the **VIDEO ON / OFF** button (top right, visible while a video plays) toggles the video window
 - **Keyboard and media keys** — see the shortcut table below
 - **Minimize to tray** — the player keeps playing in the background, the tray tooltip shows the current track
 
@@ -84,7 +84,7 @@ Click the **play button** in the title bar to switch between the downloader and 
 | `A` | Switch audio track |
 | `D` | Move video to the next monitor |
 
-The multimedia keys (play/pause, next, previous) work as well. The shortcuts are only active in player mode, so they never interfere with typing in the URL field.
+The multimedia keys (play/pause, next, previous, stop) work globally while the player is in use, also when the window is in the tray. They are released again when the player is closed and nothing is playing, so other players keep their keys. The letter shortcuts are only active in player mode, so they never interfere with typing in the URL field.
 
 ---
 

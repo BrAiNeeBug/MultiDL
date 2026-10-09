@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.2.0.4
+#AutoIt3Wrapper_Res_Fileversion=8.2.0.5
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -50,7 +50,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.2.0.4"
+Global Const $APP_VERSION = "8.2.0.5"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -320,7 +320,7 @@ EndIf
 Global $BP_fQuit = False, $BP_hVid = 0, $BP_fFull = (IniRead($BP_sIni, "player", "full", "1") = "1"), $BP_fVidShown = False, $BP_sPos = "", $BP_sWin = "", $BP_iSty = 0, $BP_iMon = 0, $BP_fWFS = False, $BP_fClick = (IniRead($BP_sIni, "video", "clickmode", "1") = "1"), $BP_tChg = 0, $BP_bDown = False, $BP_tPoll = 0
 Global $BP_iZoom = 100, $BP_tNote = 0, $BP_hOsd = 0, $BP_lblOsd = 0, $BP_tOsd = 0, $BP_iOsdMs = 3000, $BP_fWK = False
 Global $BP_fCurOn = True, $BP_iMx = -1, $BP_iMy = -1, $BP_tMouse = 0, $BP_fAwake = False
-Global $BP_iFill = 0, $BP_iFillLog = 0
+Global $BP_iFill = 0, $BP_iFillLog = 0, $BP_fMK = False, $BP_fQDone = False
 Global $BP_oWMP = 0, $BP_idWMP = 0, $BP_fWmp = False, $BP_iWInit = 0
 $BP_hMain = $hGUI
 $BP_fTray = False
@@ -330,8 +330,9 @@ TraySetOnEvent($TRAY_EVENT_PRIMARYUP, "BP_FromTray") ; single click on the tray 
 ObjEvent("AutoIt.Error", "BP_Err")
 OnAutoItExitRegister("BP_Quit")
 ; Embedded BrAiNPlay controls, styled like MultiDL.
-Global $BP_bTV = BP_B(" TV ", 474, 48, 62, 24, $BP_TXT, 9)
-Global $BP_lblNow = GUICtrlCreateLabel("stopped", 24, 54, 440, 20)
+Global $BP_bTV = BP_B("VIDEO ON", 452, 48, 84, 24, $BP_TXT, 9)
+GUICtrlSetTip($BP_bTV, "Show / hide the video   (F = fullscreen, W = window)")
+Global $BP_lblNow = GUICtrlCreateLabel("stopped", 24, 54, 424, 20)
 GUICtrlSetColor($BP_lblNow, $BP_TXT)
 GUICtrlSetFont($BP_lblNow, 9, 600, 0, "Segoe UI")
 Global $BP_lblTime = GUICtrlCreateLabel("00:00 / --:--", 24, 156, 512, 20, $SS_CENTER)
@@ -382,7 +383,21 @@ Global $BP_kMute = GUICtrlCreateDummy(), $BP_kDel = GUICtrlCreateDummy(), $BP_kT
 Global $BP_kWin = GUICtrlCreateDummy(), $BP_kEsc = GUICtrlCreateDummy(), $BP_kZI = GUICtrlCreateDummy(), $BP_kZO = GUICtrlCreateDummy()
 Global $BP_kZ0 = GUICtrlCreateDummy(), $BP_kAud = GUICtrlCreateDummy(), $BP_kMon = GUICtrlCreateDummy()
 Global $BP_aK[21][2] = [["{SPACE}", $BP_kPlay], ["s", $BP_kStop], ["n", $BP_kNext], ["p", $BP_kPrev], ["{LEFT}", $BP_kBack], ["{RIGHT}", $BP_kFwd], ["^{UP}", $BP_kVU], ["^{DOWN}", $BP_kVD], ["m", $BP_kMute], ["{DEL}", $BP_kDel], ["v", $BP_kTV], ["f", $BP_kFull], ["w", $BP_kWin], ["{ESC}", $BP_kEsc], ["{+}", $BP_kZI], ["{NUMPADADD}", $BP_kZI], ["-", $BP_kZO], ["{NUMPADSUB}", $BP_kZO], ["0", $BP_kZ0], ["a", $BP_kAud], ["d", $BP_kMon]]
+Func BP_MediaKeys($on) ; multimedia keys (play/pause, next, previous, stop) - only registered while the player is in use, so other players keep their keys
+	If $on = $BP_fMK Then Return
+	$BP_fMK = $on
+	Local $k = StringSplit("{MEDIA_PLAY_PAUSE}|{MEDIA_NEXT}|{MEDIA_PREV}|{MEDIA_STOP}", "|", 2)
+	Local $f = StringSplit("BP_PlayPause|BP_HkNext|BP_Prev|BP_Stop", "|", 2)
+	For $i = 0 To UBound($k) - 1
+		If $on Then
+			HotKeySet($k[$i], $f[$i])
+		Else
+			HotKeySet($k[$i])
+		EndIf
+	Next
+EndFunc   ;==>BP_MediaKeys
 Func BP_Keys($on) ; player keys only active in player mode, otherwise they eat letters typed in the URL field
+	BP_MediaKeys($on Or $BP_fPlay) ; (music keeps playing after leaving the player view -> keep the media keys then)
 	If $on Then
 		GUISetAccelerators($BP_aK, $hGUI)
 	Else
@@ -1998,16 +2013,26 @@ Func BP_Open($f) ; open + play, True if no error. MCI first; a video MCI can't p
 	$BP_fWmp = False
 	If $BP_idWMP Then GUICtrlSetState($BP_idWMP, $GUI_HIDE) ; hide the old WMP picture while MCI plays
 	If IsObj($BP_oWMP) Then $BP_oWMP.fullScreen = False ; leave WMP's own fullscreen (it is entered again for the next WMP video if wanted)
+	$BP_fWFS = False ; ... and that is not the user leaving it (would switch the video off)
 	BP_Mci("close bp")
 	$BP_fEmb = False
 	Local $vid = BP_IsVid($f), $c = 'open "' & $f & '" alias bp', $e
 	If $vid Then
 		BP_Log("video via MCI: " & $f)
+		Sleep(60) ; let MCI finish tearing down the previous video window
 		BP_Mci($c & " type mpegvideo parent " & Number(String($BP_hVid)) & " style child")
 		If $BP_iErr Then
-			BP_Log("open (embedded) failed: " & BP_MciErr($BP_iErr) & " | " & $f)
+			BP_Log("open (embedded) failed: " & BP_MciErr($BP_iErr) & " | " & $f & " -> retry")
 			BP_Mci("close bp")
-			BP_Mci($c & " type mpegvideo")
+			Sleep(250)
+			BP_Mci($c & " type mpegvideo parent " & Number(String($BP_hVid)) & " style child") ; second try before giving up on the embedded window
+			If $BP_iErr Then
+				BP_Log("open (embedded) failed again: " & BP_MciErr($BP_iErr))
+				BP_Mci("close bp")
+				BP_Mci($c & " type mpegvideo")
+			Else
+				$BP_fEmb = True
+			EndIf
 		Else
 			$BP_fEmb = True
 		EndIf
@@ -2138,6 +2163,7 @@ Func BP_Stop()
 	BP_VidApply()
 	GUICtrlSetData($BP_bPlay, ChrW(9654))
 	GUICtrlSetData($BP_lblNow, "stopped")
+	If Not $BP_bPlayerMode Then BP_MediaKeys(False)
 	WinSetTitle($BP_hVid, "", "BrAiNPlay Video")
 	BP_Tip()
 	GUICtrlSetData($BP_lblTime, "00:00 / --:--")
@@ -2160,6 +2186,10 @@ Func BP_Tick()
 		GUICtrlSetData($BP_lblNow, $BP_fPlay ? $BP_sNow : "stopped")
 	EndIf
 	BP_FillLen()
+	If $BP_fPlay And $BP_fVid And $BP_fVidOn And Not $BP_fTray And TimerDiff($BP_tStart) > 500 And Not BitAND(WinGetState($BP_hVid), 2) Then ; video is wanted but its window is gone (e.g. after a track change) -> bring it back
+		BP_Log("video window was hidden, showing it again")
+		BP_VidApply()
+	EndIf
 	If Not $BP_fPlay Or $BP_fPause Then Return
 	Local $m, $ended
 	If $BP_fWmp Then ; playState: 3 playing, 2 paused, 6/7/9 loading, 8 ended, 1 stopped, 10 ready
@@ -2560,7 +2590,9 @@ EndFunc   ;==>BP_IsVid
 Func BP_VidApply() ; TV button + video window follow: current track is a video? video wanted (remembered)? not in tray?
 	Local $on = $BP_fPlay And $BP_fVid
 	GUICtrlSetState($BP_bTV, $on ? $GUI_SHOW : $GUI_HIDE)
-	GUICtrlSetColor($BP_bTV, $BP_fVidOn ? $BP_ACC : $BP_OFF)
+	GUICtrlSetData($BP_bTV, $BP_fVidOn ? "VIDEO ON" : "VIDEO OFF")
+	GUICtrlSetBkColor($BP_bTV, $BP_fVidOn ? $BP_ACC : 0x3A3A3A)
+	GUICtrlSetColor($BP_bTV, $BP_TXT)
 	If $on And $BP_fVidOn And Not $BP_fTray Then
 		BP_VidStyle()
 		BP_Dock()
@@ -2649,10 +2681,16 @@ Func BP_VidPoll() ; called every ~30 ms while the video window is visible
 					BP_WmpKeys(True)
 					BP_Osd($BP_sNow, 4000)
 				EndIf
-			ElseIf $BP_fWFS Then ; the user left WMP's fullscreen (Esc / double-click) -> video off
+			ElseIf $BP_fWFS And TimerDiff($BP_tStart) > 1500 Then ; WMP left its fullscreen
 				$BP_fWFS = False
-				$BP_fVidOn = False
-				BP_VidApply()
+				$mp = $BP_oWMP.playState
+				If $mp = 3 Or $mp = 2 Then ; still playing / paused = the user left it (Esc / double-click) -> video off
+					BP_Log("WMP fullscreen left by the user -> video off")
+					$BP_fVidOn = False
+					BP_VidApply()
+				Else ; the video ended and WMP leaves fullscreen by itself -> keep "video wanted", the next video opens the window again
+					BP_Log("WMP fullscreen left (video ended, state " & $mp & ")")
+				EndIf
 			EndIf
 		EndIf
 		Return
@@ -2809,7 +2847,7 @@ Func BP_WmpKeys($on) ; while WMP is fullscreen it owns the keyboard: register ou
 	If $on = $BP_fWK Then Return
 	$BP_fWK = $on
 	Local $k = StringSplit("{SPACE}|{LEFT}|{RIGHT}|{UP}|{DOWN}|^{UP}|^{DOWN}|n|p|s|m|f|a|d|{ESC}", "|", 2)
-	Local $f = StringSplit("_PlayPause|_HkBack|_HkFwd|_HkVU|_HkVD|_HkVU|_HkVD|_HkNext|_Prev|_Stop|_Mute|_HkF|_AudioTrack|_NextMonitor|_HkEsc", "|", 2)
+	Local $f = StringSplit("BP_PlayPause|BP_HkBack|BP_HkFwd|BP_HkVU|BP_HkVD|BP_HkVU|BP_HkVD|BP_HkNext|BP_Prev|BP_Stop|BP_Mute|BP_HkF|BP_AudioTrack|BP_NextMonitor|BP_HkEsc", "|", 2)
 	For $i = 0 To UBound($k) - 1
 		If $on Then
 			HotKeySet($k[$i], $f[$i])
@@ -3125,10 +3163,17 @@ Func BP_MciErr($n) ; MCI error code -> text
 	Return $n & " " & DllStructGetData($t, 1)
 EndFunc   ;==>BP_MciErr
 Func BP_Quit()
+	If $BP_fQDone Then Return ; runs twice (explicit call + exit handler); the second time the video window and WMP are already gone
+	$BP_fQDone = True
 	BP_WmpKeys(False)
+	BP_MediaKeys(False)
 	BP_Cursor(True)
 	BP_KeepAwake(False)
-	If IsObj($BP_oWMP) Then $BP_oWMP.controls.stop()
+	If IsObj($BP_oWMP) Then
+		$BP_oWMP.fullScreen = False
+		$BP_oWMP.controls.stop()
+		$BP_oWMP = 0 ; release the control before the windows are deleted
+	EndIf
 	BP_Mci("close bp")
 	IniWrite($BP_sIni, "player", "video", $BP_fVidOn ? "1" : "0")
 	IniWrite($BP_sIni, "player", "full", $BP_fFull ? "1" : "0")
