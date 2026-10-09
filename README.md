@@ -159,3 +159,5 @@ The player uses the Windows multimedia engine (MCI) and, for video formats MCI c
 ## License
 
 Do whatever you want with it.
+
+## Many thx for all the HARD Work to claude.ai and chatgpt.com
