@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.2.0.6
+#AutoIt3Wrapper_Res_Fileversion=8.2.0.7
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -50,7 +50,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.2.0.6"
+Global Const $APP_VERSION = "8.2.0.7"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -3178,7 +3178,7 @@ Func BP_FromTray()
 	BP_VidApply()
 EndFunc   ;==>BP_FromTray
 Func BP_Tip() ; tray tooltip = current track
-	TraySetToolTip($BP_fPlay ? StringLeft($BP_sNow, 120) : "BrAiNPlay")
+	TraySetToolTip($BP_fPlay ? StringLeft($BP_sNow, 120) : $APP_TITLE)
 EndFunc   ;==>BP_Tip
 Func BP_Name($f)
 	Return StringRegExpReplace($f, "^.*\\|\.[^.]*$", "")
