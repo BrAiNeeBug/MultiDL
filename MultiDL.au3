@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.2.0.7
+#AutoIt3Wrapper_Res_Fileversion=8.2.0.8
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -50,7 +50,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.2.0.7"
+Global Const $APP_VERSION = "8.2.0.8"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -2255,7 +2255,7 @@ Func BP_Tick()
 			BP_Next(1)
 		Else
 			BP_Stop()
-			If $bad Then GUICtrlSetData($BP_lblNow, (BP_IsVid($BP_aPl[$BP_iCur]) And Not IsObj($BP_oWMP)) ? "video needs Windows Media Player (Legacy) or a codec pack" : "can't play this file (see brainplay.log)")
+			If $bad Then GUICtrlSetData($BP_lblNow, (BP_IsVid($BP_aPl[$BP_iCur]) And Not IsObj($BP_oWMP)) ? "video needs Windows Media Player (Legacy) or a codec pack" : "can't play this file")
 		EndIf
 		Return
 	EndIf
@@ -3189,7 +3189,7 @@ EndFunc   ;==>BP_T
 Func BP_Err()
 EndFunc   ;==>BP_Err
 Func BP_Log($s) ; %APPDATA%\BrAiNPlay\brainplay.log
-	FileWriteLine($BP_sApp & "\brainplay.log", @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & "  " & $s)
+;~ 	FileWriteLine($BP_sApp & "\brainplay.log", @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & "  " & $s); disabled for multidl release
 EndFunc   ;==>BP_Log
 Func BP_WmpErr() ; last WMP error text (if any)
 	Local $e = $BP_oWMP.Error
