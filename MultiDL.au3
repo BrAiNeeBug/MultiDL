@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.2.0.5
+#AutoIt3Wrapper_Res_Fileversion=8.2.0.6
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -50,7 +50,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.2.0.5"
+Global Const $APP_VERSION = "8.2.0.6"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
@@ -320,7 +320,7 @@ EndIf
 Global $BP_fQuit = False, $BP_hVid = 0, $BP_fFull = (IniRead($BP_sIni, "player", "full", "1") = "1"), $BP_fVidShown = False, $BP_sPos = "", $BP_sWin = "", $BP_iSty = 0, $BP_iMon = 0, $BP_fWFS = False, $BP_fClick = (IniRead($BP_sIni, "video", "clickmode", "1") = "1"), $BP_tChg = 0, $BP_bDown = False, $BP_tPoll = 0
 Global $BP_iZoom = 100, $BP_tNote = 0, $BP_hOsd = 0, $BP_lblOsd = 0, $BP_tOsd = 0, $BP_iOsdMs = 3000, $BP_fWK = False
 Global $BP_fCurOn = True, $BP_iMx = -1, $BP_iMy = -1, $BP_tMouse = 0, $BP_fAwake = False
-Global $BP_iFill = 0, $BP_iFillLog = 0, $BP_fMK = False, $BP_fQDone = False
+Global $BP_iFill = 0, $BP_iFillLog = 0, $BP_fMK = False, $BP_fQDone = False, $BP_tMK = 0, $BP_tMKp = 0
 Global $BP_oWMP = 0, $BP_idWMP = 0, $BP_fWmp = False, $BP_iWInit = 0
 $BP_hMain = $hGUI
 $BP_fTray = False
@@ -383,11 +383,53 @@ Global $BP_kMute = GUICtrlCreateDummy(), $BP_kDel = GUICtrlCreateDummy(), $BP_kT
 Global $BP_kWin = GUICtrlCreateDummy(), $BP_kEsc = GUICtrlCreateDummy(), $BP_kZI = GUICtrlCreateDummy(), $BP_kZO = GUICtrlCreateDummy()
 Global $BP_kZ0 = GUICtrlCreateDummy(), $BP_kAud = GUICtrlCreateDummy(), $BP_kMon = GUICtrlCreateDummy()
 Global $BP_aK[21][2] = [["{SPACE}", $BP_kPlay], ["s", $BP_kStop], ["n", $BP_kNext], ["p", $BP_kPrev], ["{LEFT}", $BP_kBack], ["{RIGHT}", $BP_kFwd], ["^{UP}", $BP_kVU], ["^{DOWN}", $BP_kVD], ["m", $BP_kMute], ["{DEL}", $BP_kDel], ["v", $BP_kTV], ["f", $BP_kFull], ["w", $BP_kWin], ["{ESC}", $BP_kEsc], ["{+}", $BP_kZI], ["{NUMPADADD}", $BP_kZI], ["-", $BP_kZO], ["{NUMPADSUB}", $BP_kZO], ["0", $BP_kZ0], ["a", $BP_kAud], ["d", $BP_kMon]]
+Func BP_KeyDown($vk)
+	Local $r = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", $vk)
+	Return (Not @error) And BitAND($r[0], 0x8000) <> 0
+EndFunc   ;==>BP_KeyDown
+Func BP_MkPlay() ; play/pause media key, ignoring auto-repeat while the key is held
+	Local $dt = TimerDiff($BP_tMKp)
+	$BP_tMKp = TimerInit()
+	If $dt >= 400 Then BP_PlayPause()
+EndFunc   ;==>BP_MkPlay
+Func BP_MkStop()
+	Local $dt = TimerDiff($BP_tMKp)
+	$BP_tMKp = TimerInit()
+	If $dt >= 400 Then BP_Stop()
+EndFunc   ;==>BP_MkStop
+Func BP_MkNext() ; media key "next": short press = next track, hold = fast forward
+	BP_MkKey(1)
+EndFunc   ;==>BP_MkNext
+Func BP_MkPrev() ; media key "previous": short press = previous track, hold = rewind
+	BP_MkKey(-1)
+EndFunc   ;==>BP_MkPrev
+Func BP_MkKey($dir)
+	Local $dt = TimerDiff($BP_tMK), $vk = ($dir > 0) ? 0xB0 : 0xB1, $t = TimerInit(), $bHold = False
+	$BP_tMK = TimerInit()
+	If $dt < 400 Then Return ; auto-repeat of a key that is being held / rested on -> ignore
+	While BP_KeyDown($vk)
+		If TimerDiff($t) > 400 Then
+			$bHold = True
+			ExitLoop
+		EndIf
+		Sleep(15)
+	WEnd
+	If Not $bHold Then
+		BP_Next($dir) ; short press
+	Else
+		While BP_KeyDown($vk) ; held: seek 5 s every 200 ms
+			BP_Skip($dir * 5)
+			$BP_tMK = TimerInit()
+			Sleep(200)
+		WEnd
+	EndIf
+	$BP_tMK = TimerInit() ; repeats that queued up meanwhile are ignored
+EndFunc   ;==>BP_MkKey
 Func BP_MediaKeys($on) ; multimedia keys (play/pause, next, previous, stop) - only registered while the player is in use, so other players keep their keys
 	If $on = $BP_fMK Then Return
 	$BP_fMK = $on
 	Local $k = StringSplit("{MEDIA_PLAY_PAUSE}|{MEDIA_NEXT}|{MEDIA_PREV}|{MEDIA_STOP}", "|", 2)
-	Local $f = StringSplit("BP_PlayPause|BP_HkNext|BP_Prev|BP_Stop", "|", 2)
+	Local $f = StringSplit("BP_MkPlay|BP_MkNext|BP_MkPrev|BP_MkStop", "|", 2)
 	For $i = 0 To UBound($k) - 1
 		If $on Then
 			HotKeySet($k[$i], $f[$i])
