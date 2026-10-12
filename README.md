@@ -20,7 +20,7 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 - **One-click updater** — updates yt-dlp and ffmpeg to latest versions
 - **Auto install** — downloads and installs yt-dlp + ffmpeg + deno automatically on first run
 
-### Built-in player (BrAiNPlay)
+### Built-in player (BrAiNPlay) not working under Wine currently...
 
 - **Plays everything you download** — audio and video, opened with the player button in the title bar
 - **Download folder as playlist** — `MultiDL-Downloads` is loaded into the playlist every time the player opens (files already in the list are not added twice)
