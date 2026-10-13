@@ -1,4 +1,4 @@
-# BrAiNee's MultiDL v8.2.0.8 (09.10.2026)
+# BrAiNee's MultiDL v8.3.0.0 (13.10.2026)
 
 A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ffmpeg** — now with a built-in media player (**BrAiNPlay**). Built in AutoIt, with **Wine on Linux** compatibility for the downloader.
 
@@ -20,7 +20,7 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 - **One-click updater** — updates yt-dlp and ffmpeg to latest versions
 - **Auto install** — downloads and installs yt-dlp + ffmpeg + deno automatically on first run
 
-### Built-in player (BrAiNPlay) not working under Wine currently...
+### Built-in player (BrAiNPlay)
 
 - **Plays everything you download** — audio and video, opened with the player button in the title bar
 - **Download folder as playlist** — `MultiDL-Downloads` is loaded into the playlist every time the player opens (files already in the list are not added twice)
