@@ -16,7 +16,6 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 - **Playlist mode** — download entire playlists or single files
 - **Auto URL cleanup** — strips playlist parameters from single-video links
 - **Start / Stop toggle** — cancel any running download at any time
-- **PasteStart** — paste URL from clipboard and start immediately
 - **Play last file** — reopen the last downloaded file directly from the GUI
 - **CMD window toggle** — optionally show the yt-dlp console for debugging
 - **One-click updater** — updates yt-dlp and ffmpeg to latest versions
@@ -40,7 +39,7 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 
 ### Normal Download
 
-1. Paste a URL into the input field (or use **PasteStart**)
+1. Paste a URL into the input field
 2. Choose the format: **Video (MP4)**, **Audio (MP3)** or **Live**
 3. Choose the mode: **Single** or **Playlist**
 4. Click **Start** — progress bar and status update live
@@ -50,7 +49,7 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 
 Select **Live** in the Format row.
 
-1. Paste a URL into the input field (or use **PasteStart**)
+1. Paste a URL into the input field
 2. Click **Start**
 3. MultiDL downloads the video as `_watch_live.mp4` while you watch — the file grows as it downloads
 4. Click **Stop** to cancel, select **Video** or **Audio** again to return to normal downloads
