@@ -152,13 +152,6 @@ This is a deliberate limitation, not a bug. Only single-song links are handled.
 
 MultiDL automatically installs the supported dependencies on first launch.
 
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp): downloads video and audio from supported websites.
-- [ffmpeg](https://github.com/BtbN/FFmpeg-Builds): merges video and audio streams and performs audio conversion.
-- [Deno](https://github.com/denoland/deno): JavaScript runtime required by yt-dlp for certain extractors.
-- [7-Zip](https://github.com/ip7z/7zip): used for temporary extraction, including the Wine/Linux setup where required.
-
-The ffmpeg package may be approximately 170 MB to download.
-
 The application fetches supported binaries from their respective sources. On Wine/Linux, the setup process may retrieve a compatible 7-Zip release through the GitHub API for extraction.
 
 All downloader binaries are stored in the `bin\` directory next to the application executable.
