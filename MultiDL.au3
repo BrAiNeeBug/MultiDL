@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.3.0.3
+#AutoIt3Wrapper_Res_Fileversion=8.3.0.4
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -51,7 +51,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.3.0.3"
+Global Const $APP_VERSION = "8.3.0.4"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Link-Watcher / Automatik-Optionen ----
 Global Const $CFG_FILE = @AppDataDir & "\MultiDL\settings.ini"
@@ -867,7 +867,17 @@ While 1
 			EndIf
 			; Toggle: Einzeln
 		Case $iMsg = $hToggleSingle
-			If $BP_bPlaylistMode And Not $g_bLiveSel Then
+			If $g_bLiveSel Then ; leave Live: back to the last format (Video/Audio) with the clicked mode
+				If $hDLProc = 0 Then
+					$bLiveMode = False
+					$g_bLiveSel = False
+					$BP_bPlaylistMode = False
+					_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $hModeInfo, $bMP3Mode ? 1 : 0)
+					_ModePaint($hToggleSingle, $hTogglePlaylist, $hPlaylistInfo)
+					_SetStatus($hStatus, "Mode: Single", $CLR_MUTED)
+					_RefreshCleanDisplay($hInput, $hCleanDisplay)
+				EndIf
+			ElseIf $BP_bPlaylistMode Then
 				$BP_bPlaylistMode = False
 				GUICtrlSetBkColor($hToggleSingle, $CLR_ACCENT)
 				GUICtrlSetColor($hToggleSingle, $CLR_TEXT)
@@ -879,7 +889,17 @@ While 1
 			EndIf
 			; Toggle: Playlist
 		Case $iMsg = $hTogglePlaylist
-			If Not $BP_bPlaylistMode And Not $g_bLiveSel Then
+			If $g_bLiveSel Then ; leave Live: back to the last format (Video/Audio) with the clicked mode
+				If $hDLProc = 0 Then
+					$bLiveMode = False
+					$g_bLiveSel = False
+					$BP_bPlaylistMode = True
+					_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $hModeInfo, $bMP3Mode ? 1 : 0)
+					_ModePaint($hToggleSingle, $hTogglePlaylist, $hPlaylistInfo)
+					_SetStatus($hStatus, "Mode: Multi", $CLR_MUTED)
+					_RefreshCleanDisplay($hInput, $hCleanDisplay)
+				EndIf
+			ElseIf Not $BP_bPlaylistMode Then
 				$BP_bPlaylistMode = True
 				GUICtrlSetBkColor($hTogglePlaylist, $CLR_ACCENT)
 				GUICtrlSetColor($hTogglePlaylist, $CLR_TEXT)
@@ -988,11 +1008,11 @@ Exit
 ; Single/Multi-Knoepfe neu zeichnen (bei Live ausgegraut)
 Func _ModePaint($hSingle, $hMulti, $hInfo)
 	If $g_bLiveSel Then
-		GUICtrlSetBkColor($hSingle, 0x1A1A1A)
-		GUICtrlSetColor($hSingle, 0x555555)
-		GUICtrlSetBkColor($hMulti, 0x1A1A1A)
-		GUICtrlSetColor($hMulti, 0x555555)
-		GUICtrlSetData($hInfo, "(live = single stream)")
+		GUICtrlSetBkColor($hSingle, 0x222222)
+		GUICtrlSetColor($hSingle, $CLR_MUTED)
+		GUICtrlSetBkColor($hMulti, 0x222222)
+		GUICtrlSetColor($hMulti, $CLR_MUTED)
+		GUICtrlSetData($hInfo, "(watch a livestream)")
 	Else
 		GUICtrlSetBkColor($hSingle, $BP_bPlaylistMode ? 0x222222 : $CLR_ACCENT)
 		GUICtrlSetColor($hSingle, $BP_bPlaylistMode ? $CLR_MUTED : $CLR_TEXT)
