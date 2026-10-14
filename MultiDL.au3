@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.3.0.2
+#AutoIt3Wrapper_Res_Fileversion=8.3.0.3
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -51,7 +51,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.3.0.2"
+Global Const $APP_VERSION = "8.3.0.3"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Link-Watcher / Automatik-Optionen ----
 Global Const $CFG_FILE = @AppDataDir & "\MultiDL\settings.ini"
@@ -68,6 +68,7 @@ Global $g_sUnzipDebug = ""
 Global $bMP3Mode = False
 ; ---- Multi-Modus: False = einzelnes Video (Single), True = ganze Playlist (Multi) ----
 Global $BP_bPlaylistMode = False
+Global $g_bLiveSel = False ; Live selected: Single/Multi is switched off (a live stream is always a single stream)
 ; ---- CMD-Fenster sichtbar? ----
 Global $bShowCMD = False
 ; ---- Start-Button-Zustand (nur bei Aenderung neu zeichnen, sonst flackert er) ----
@@ -172,7 +173,7 @@ Local $hToggleMP3 = GUICtrlCreateLabel("Audio(MP3)", 176, 207, 84, 26, BitOR($SS
 GUICtrlSetFont($hToggleMP3, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleMP3, $CLR_MUTED)
 GUICtrlSetBkColor($hToggleMP3, 0x222222)
-Local $hModeInfo = GUICtrlCreateLabel("(best video quality)", 328, 212, 208, 18)
+Local $hModeInfo = GUICtrlCreateLabel("", 328, 212, 208, 18)
 GUICtrlSetFont($hModeInfo, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hModeInfo, $CLR_MUTED)
 GUICtrlSetBkColor($hModeInfo, $CLR_BG)
@@ -189,11 +190,11 @@ Local $hTogglePlaylist = GUICtrlCreateLabel("Multi", 176, 239, 84, 26, BitOR($SS
 GUICtrlSetFont($hTogglePlaylist, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hTogglePlaylist, $CLR_MUTED)
 GUICtrlSetBkColor($hTogglePlaylist, 0x222222)
-Local $hPlaylistInfo = GUICtrlCreateLabel("(download single file)", 328, 244, 208, 18)
+Local $hPlaylistInfo = GUICtrlCreateLabel("(download single file)", 356, 244, 180, 18)
 GUICtrlSetFont($hPlaylistInfo, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hPlaylistInfo, $CLR_MUTED)
 GUICtrlSetBkColor($hPlaylistInfo, $CLR_BG)
-Local $hToggleLive = GUICtrlCreateLabel("Live", 264, 207, 56, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
+Local $hToggleLive = GUICtrlCreateLabel("Live", 264, 239, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
 GUICtrlSetFont($hToggleLive, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleLive, $CLR_MUTED)
 GUICtrlSetBkColor($hToggleLive, 0x222222)
@@ -839,25 +840,34 @@ While 1
 			If Not ($bLiveMode And $hDLProc <> 0) Then
 				$bMP3Mode = False
 				$bLiveMode = False
+				$g_bLiveSel = False
 				_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $hModeInfo, 0)
+				_ModePaint($hToggleSingle, $hTogglePlaylist, $hPlaylistInfo)
+				_RefreshCleanDisplay($hInput, $hCleanDisplay)
 				_SetStatus($hStatus, "Modus: Video", $CLR_MUTED)
 			EndIf
 		Case $iMsg = $hToggleMP3
 			If Not ($bLiveMode And $hDLProc <> 0) Then
 				$bMP3Mode = True
 				$bLiveMode = False
+				$g_bLiveSel = False
 				_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $hModeInfo, 1)
+				_ModePaint($hToggleSingle, $hTogglePlaylist, $hPlaylistInfo)
+				_RefreshCleanDisplay($hInput, $hCleanDisplay)
 				_SetStatus($hStatus, "Modus: Audio", $CLR_MUTED)
 			EndIf
 		Case $iMsg = $hToggleLive
 			If $hDLProc = 0 Then
 				$bLiveMode = True
+				$g_bLiveSel = True
 				_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $hModeInfo, 2)
+				_ModePaint($hToggleSingle, $hTogglePlaylist, $hPlaylistInfo)
+				_RefreshCleanDisplay($hInput, $hCleanDisplay)
 				_SetStatus($hStatus, "Live-Modus: URL oben verwenden.", $CLR_ACCENT)
 			EndIf
 			; Toggle: Einzeln
 		Case $iMsg = $hToggleSingle
-			If $BP_bPlaylistMode Then
+			If $BP_bPlaylistMode And Not $g_bLiveSel Then
 				$BP_bPlaylistMode = False
 				GUICtrlSetBkColor($hToggleSingle, $CLR_ACCENT)
 				GUICtrlSetColor($hToggleSingle, $CLR_TEXT)
@@ -869,7 +879,7 @@ While 1
 			EndIf
 			; Toggle: Playlist
 		Case $iMsg = $hTogglePlaylist
-			If Not $BP_bPlaylistMode Then
+			If Not $BP_bPlaylistMode And Not $g_bLiveSel Then
 				$BP_bPlaylistMode = True
 				GUICtrlSetBkColor($hTogglePlaylist, $CLR_ACCENT)
 				GUICtrlSetColor($hTogglePlaylist, $CLR_TEXT)
@@ -975,13 +985,29 @@ WEnd
 BP_Quit()
 GUIDelete($hGUI)
 Exit
+; Single/Multi-Knoepfe neu zeichnen (bei Live ausgegraut)
+Func _ModePaint($hSingle, $hMulti, $hInfo)
+	If $g_bLiveSel Then
+		GUICtrlSetBkColor($hSingle, 0x1A1A1A)
+		GUICtrlSetColor($hSingle, 0x555555)
+		GUICtrlSetBkColor($hMulti, 0x1A1A1A)
+		GUICtrlSetColor($hMulti, 0x555555)
+		GUICtrlSetData($hInfo, "(live = single stream)")
+	Else
+		GUICtrlSetBkColor($hSingle, $BP_bPlaylistMode ? 0x222222 : $CLR_ACCENT)
+		GUICtrlSetColor($hSingle, $BP_bPlaylistMode ? $CLR_MUTED : $CLR_TEXT)
+		GUICtrlSetBkColor($hMulti, $BP_bPlaylistMode ? $CLR_ACCENT : 0x222222)
+		GUICtrlSetColor($hMulti, $BP_bPlaylistMode ? $CLR_TEXT : $CLR_MUTED)
+		GUICtrlSetData($hInfo, $BP_bPlaylistMode ? "(download all files)" : "(download single file)")
+	EndIf
+EndFunc   ;==>_ModePaint
 Func _FmtPaint($hV, $hM, $hL, $hInfo, $iSel) ; 0 = Video, 1 = Audio, 2 = Live
 	Local $aH[3] = [$hV, $hM, $hL], $aT[3] = ["(best video quality)", "(best audio quality)", "(watch live stream)"]
 	For $i = 0 To 2
 		GUICtrlSetBkColor($aH[$i], $i = $iSel ? $CLR_ACCENT : 0x222222)
 		GUICtrlSetColor($aH[$i], $i = $iSel ? $CLR_TEXT : $CLR_MUTED)
 	Next
-	GUICtrlSetData($hInfo, $aT[$iSel])
+	GUICtrlSetData($hInfo, "") ; no hint text next to the format buttons any more
 EndFunc   ;==>_FmtPaint
 ; URL-Erkennung: HTTP(S) oder Domain ohne Schema (z.B. example.de/path)
 Func _DetectURL($sText, $bAllowDomain = True)
@@ -1059,7 +1085,7 @@ EndFunc   ;==>_ShowLiveControls
 ; ============================================================
 Func _CleanURL($sURL)
 	$sURL = StringStripWS($sURL, 3)
-	If Not $BP_bPlaylistMode Then
+	If Not $BP_bPlaylistMode Or $g_bLiveSel Then
 		Local $iAmp = StringInStr($sURL, "&")
 		If $iAmp > 0 Then $sURL = StringLeft($sURL, $iAmp - 1)
 	EndIf
