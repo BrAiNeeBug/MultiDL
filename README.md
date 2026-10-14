@@ -12,9 +12,10 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 
 - **Video download**: best available video and audio quality, merged into MP4 using ffmpeg.
 - **Audio download**: best available audio extracted as MP3 via ffmpeg.
-- **Live View**: watch a video while it downloads.
+- **Live View**: watch a video while it downloads. With the internal player enabled it opens in BrAiNPlay, otherwise in your system player.
 - **Playlist mode**: download entire playlists or individual files.
-- **Auto URL cleanup**: removes playlist parameters from single-video links.
+- **Auto URL cleanup**: removes playlist parameters from single-video links (silently, no extra info line).
+- **Status bar info**: shows the selected format and mode (e.g. `Video (MP4): best video quality | Single: download one file`).
 - **Clipboard monitoring**: detect supported URLs copied to the clipboard.
 - **Automatic link processing**: configure how detected links are handled.
 - **Domain link detection**: recognize supported links based on their domain.
@@ -22,28 +23,30 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 - **Play last file**: reopen the last downloaded file directly from the GUI.
 - **View Downloads**: open the download directory.
 - **CMD window toggle**: optionally show the yt-dlp console for debugging.
-- **One-click updater**: update yt-dlp and ffmpeg using the integrated update functionality.
+- **One-click tool updater**: update yt-dlp, ffmpeg and Deno from the options menu.
+- **Self-update from GitHub**: an update badge appears in the title bar when a newer release exists; one click replaces `MultiDL.exe` and restarts (see *Updating*).
 - **Automatic installation**: download and set up yt-dlp, ffmpeg, and Deno on first run.
 
 ### Built-in Player: BrAiNPlay
 
 - **Audio and video playback** for supported media files.
 - **Integrated player interface**: switch between the downloader and player using the title-bar player button.
-- **Download folder as playlist**: `MultiDL-Downloads` is loaded whenever the player opens. Files already in the playlist are not added twice.
+- **Download folder as playlist**: `MultiDL-Downloads` is synced whenever the player opens and then every few seconds, **also while a download is running**. New files show up as soon as they are finished; half-written files and yt-dlp temp files are skipped. Files already in the playlist are not added twice, and a track you removed stays removed until you reopen the player.
+- **Manual playlists**: after loading an `.m3u` with **LOAD**, the playlist no longer follows the download folder. **CLEAR** switches the automatic sync back on.
 - **Click-to-seek waveform**: the waveform reflects the current track; click it to seek.
 - **Volume and balance**: draggable sliders, with settings remembered between sessions.
 - **Playlist tools**: add files, add folders, remove tracks, clear the playlist, and save or load `.m3u` playlists.
 - **Automatic playlist saving**: the last playlist is saved automatically.
 - **Shuffle and loop**: playback modes for your music collection.
 - **Video playback**: fullscreen on the active monitor or a window sized to the video.
-- **VIDEO ON / OFF**: toggle the video window while a video is playing.
+- **VIDEO ON / OFF**: toggle the video while a video is playing. Works for the built-in video window and for videos played through ffplay (OFF = sound only, ffplay restarts at the same position).
 - **Player selection**: choose the available playback method through the options, where supported.
 - **Keyboard shortcuts and media keys**: control playback without relying on the mouse.
 - **Minimize to tray**: playback continues in the background, and the tray tooltip displays the current track.
 
 ### Options Menu
 
-The options menu provides access to configurable application behavior.
+The options menu opens when you click the app name in the title bar (it is highlighted on mouse-over).
 
 Depending on the selected options and the current version, configuration includes:
 
@@ -83,11 +86,12 @@ Select **Live** in the Format row.
 1. Paste a URL into the input field
 2. Click **Start**.
 3. MultiDL downloads the video as `_watch_live.mp4` while you watch. The file grows as the download progresses.
-4. Click **Stop** to cancel the operation. Select **Video** or **Audio** again to return to normal downloads.
+4. With **Use internal player (BrAiNPlay)** enabled, the stream opens in BrAiNPlay (played through ffplay, with the VIDEO ON / OFF switch) and the window switches to the player view, like **Play last File**. With the option disabled, your system player is used.
+5. To stop, click the **player button** to return to the download view and click **Stop**. The live file is then removed from the playlist. Select **Video** or **Audio** again to return to normal downloads.
 
 The format cannot be changed while a live stream is running.
 
-> The file `_watch_live.mp4` remains in the downloads folder after playback. It is overwritten during the next Live session. Rename it if you want to keep it. Files starting with `_` are not added to the player playlist.
+> The file `_watch_live.mp4` remains in the downloads folder after playback. It is overwritten during the next Live session. Rename it if you want to keep it. Files starting with `_` are not added automatically to the player playlist and are not saved in `last.m3u`.
 
 ### Player
 
@@ -116,10 +120,10 @@ The following shortcuts are available in player mode.
 | `Ctrl+↑` / `Ctrl+↓` | Volume up / down |
 | `M` | Mute |
 | `Del` | Remove selected track from the playlist |
-| `V` | Show / hide the video window |
+| `V` | Show / hide the video (also for ffplay videos) |
 | `F` | Fullscreen |
 | `W` | Window mode, sized to the video |
-| `Esc` | Leave fullscreen |
+| `Esc` | Leave fullscreen / video off |
 | `+` / `-` / `0` | Zoom in / out / reset video zoom |
 | `A` | Switch audio track |
 | `D` | Move video to the next monitor |
@@ -158,7 +162,15 @@ All downloader binaries are stored in the `bin\` directory next to the applicati
 
 ### Updating Components
 
-Use the integrated updater to update supported components, including yt-dlp and ffmpeg.
+Use the integrated updater (options menu) to update yt-dlp, ffmpeg and Deno.
+
+### Updating MultiDL itself
+
+On start, `MultiDL.exe` copies itself to `bin\~MultiDL.exe`, starts that copy and exits. This way `MultiDL.exe` is never locked while the program runs and can simply be replaced.
+
+When a newer release exists, an update badge appears in the title bar. Click it to download `MultiDL.exe` from the latest GitHub release, replace the main file and restart. The release needs an asset named `MultiDL.exe`. You can also just overwrite `MultiDL.exe` by hand while MultiDL is running.
+
+If MultiDL was not started through the copy (for example when run from the script), the badge only opens the release page.
 
 Keep the application files together and avoid mixing files from different releases.
 
@@ -169,6 +181,7 @@ Keep the application files together and avoid mixing files from different releas
 ```text
 MultiDL.exe
 bin\
+    ~MultiDL.exe        (running copy, created automatically)
     yt-dlp.exe
     ffmpeg.exe
     ffprobe.exe
