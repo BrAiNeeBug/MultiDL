@@ -503,6 +503,7 @@ _CheckForUpdate($hUpdateBadge)
 _ModeStatus($hStatus)
 Local $tBPUI = TimerInit()
 Local $tHov = TimerInit(), $bTitleHov = False
+Local $tAct = TimerInit(), $bAct = False ; make sure the window really has the focus after start (else the first click is lost)
 ; ---- Hauptschleife ----
 Local $bDragging = False
 Local $iDragX, $iDragY
@@ -514,6 +515,13 @@ While 1
 	Local $aMsg = GUIGetMsg(1)
 	Local $iMsg = $aMsg[0]
 	If $BP_fQuit Then ExitLoop
+	If Not $bAct Then
+		If WinActive($hGUI) Or TimerDiff($tAct) > 2000 Then
+			$bAct = True
+		Else
+			WinActivate($hGUI)
+		EndIf
+	EndIf
 	; ---- app name = options button: highlight on mouse over ----
 	If TimerDiff($tHov) > 60 Then
 		$tHov = TimerInit()
