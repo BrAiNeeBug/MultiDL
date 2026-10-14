@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.3.0.0
+#AutoIt3Wrapper_Res_Fileversion=8.3.0.1
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -51,7 +51,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.3.0.0"
+Global Const $APP_VERSION = "8.3.0.1"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Link-Watcher / Automatik-Optionen ----
 Global Const $CFG_FILE = @AppDataDir & "\MultiDL\settings.ini"
@@ -66,7 +66,7 @@ Global $g_hOptGUI = 0, $g_hOptClip = 0, $g_hOptDomain = 0, $g_hOptAuto = 0, $g_h
 Global $g_sUnzipDebug = ""
 ; ---- Modus: False = Video, True = MP3 ----
 Global $bMP3Mode = False
-; ---- Playlist-Modus: False = einzelnes Video, True = ganze Playlist ----
+; ---- Multi-Modus: False = einzelnes Video (Single), True = ganze Playlist (Multi) ----
 Global $BP_bPlaylistMode = False
 ; ---- CMD-Fenster sichtbar? ----
 Global $bShowCMD = False
@@ -185,7 +185,7 @@ Local $hToggleSingle = GUICtrlCreateLabel("  Single  ", 88, 239, 90, 26)
 GUICtrlSetFont($hToggleSingle, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleSingle, $CLR_TEXT)
 GUICtrlSetBkColor($hToggleSingle, $CLR_ACCENT)
-Local $hTogglePlaylist = GUICtrlCreateLabel("  Playlist  ", 178, 239, 90, 26)
+Local $hTogglePlaylist = GUICtrlCreateLabel("  Multi  ", 178, 239, 90, 26)
 GUICtrlSetFont($hTogglePlaylist, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hTogglePlaylist, $CLR_MUTED)
 GUICtrlSetBkColor($hTogglePlaylist, 0x222222)
@@ -552,13 +552,13 @@ While 1
 			Local $sDetected = _DetectURL($sClipNow, $g_bDomainLinks)
 			If $sDetected <> "" Then
 				GUICtrlSetData($hInput, $sDetected)
-				GUICtrlSetData($hCleanDisplay, _CleanURL($sDetected))
+				_ShowClean($hCleanDisplay, $sDetected)
 				_UpdateStartAppearance($hBtnDownload, True)
 				_SetStatus($hStatus, "Link aus Zwischenablage erkannt.", 0x4FC3F7)
 				If $g_bAutoStart And $sDetected <> $g_sLastAutoURL And $hDLProc = 0 Then
 					$g_sLastAutoURL = $sDetected
 					Local $sAutoClean = _CleanURL($sDetected)
-					GUICtrlSetData($hCleanDisplay, $sAutoClean)
+					_ShowClean($hCleanDisplay, $sDetected)
 					If $bLiveMode Then
 						_StartLive($sAutoClean, $hProgBar, $hProgLabel, $hProgPct, $hBtnDownload, 364, 12)
 					Else
@@ -864,11 +864,8 @@ While 1
 				GUICtrlSetBkColor($hTogglePlaylist, 0x222222)
 				GUICtrlSetColor($hTogglePlaylist, $CLR_MUTED)
 				GUICtrlSetData($hPlaylistInfo, "(download single file)")
-				_SetStatus($hStatus, "Modus: Single File", $CLR_MUTED)
-				GUICtrlSetState($hBtnPlay, $GUI_SHOW)
-				GUICtrlSetState($hBtnFolder, $GUI_SHOW)
-				GUICtrlSetState($hPlayLabel, $GUI_SHOW)
-				GUICtrlSetState($hLine4, $GUI_SHOW)
+				_SetStatus($hStatus, "Mode: Single", $CLR_MUTED)
+				_RefreshCleanDisplay($hInput, $hCleanDisplay)
 			EndIf
 			; Toggle: Playlist
 		Case $iMsg = $hTogglePlaylist
@@ -879,11 +876,8 @@ While 1
 				GUICtrlSetBkColor($hToggleSingle, 0x222222)
 				GUICtrlSetColor($hToggleSingle, $CLR_MUTED)
 				GUICtrlSetData($hPlaylistInfo, "(download all files)")
-				_SetStatus($hStatus, "Modus: Playlist", $CLR_MUTED)
-				GUICtrlSetState($hBtnPlay, $GUI_HIDE)
-				GUICtrlSetState($hBtnFolder, $GUI_HIDE)
-				GUICtrlSetState($hPlayLabel, $GUI_HIDE)
-				GUICtrlSetState($hLine4, $GUI_HIDE)
+				_SetStatus($hStatus, "Mode: Multi", $CLR_MUTED)
+				_RefreshCleanDisplay($hInput, $hCleanDisplay)
 			EndIf
 			; Download / Stop Toggle
 		Case $iMsg = $hBtnDownload
@@ -917,7 +911,7 @@ While 1
 					If $sNorm <> "" Then $sRaw = $sNorm
 					Local $sClean = _CleanURL($sRaw)
 					$g_sLastAutoURL = $sRaw
-					GUICtrlSetData($hCleanDisplay, $sClean)
+					_ShowClean($hCleanDisplay, $sRaw)
 					If $bLiveMode Then
 						_StartLive($sClean, $hProgBar, $hProgLabel, $hProgPct, $hBtnDownload, 364, 12)
 					Else
@@ -936,7 +930,7 @@ While 1
 				Else
 					GUICtrlSetData($hInput, $sClip)
 					Local $sClean = _CleanURL($sClip)
-					GUICtrlSetData($hCleanDisplay, $sClean)
+					_ShowClean($hCleanDisplay, $sClip)
 					_StartDownload($sClean, $hStatus, $hProgBar, $hProgLabel, $hProgPct)
 				EndIf
 			EndIf
@@ -1071,6 +1065,27 @@ Func _CleanURL($sURL)
 	EndIf
 	Return $sURL
 EndFunc   ;==>_CleanURL
+; Cleaned-Link-Anzeige neu berechnen (z.B. nach Single/Multi-Wechsel)
+Func _RefreshCleanDisplay($hInput, $hCleanDisplay)
+	Local $sCur = StringStripWS(GUICtrlRead($hInput), 3)
+	Local $sNorm = _DetectURL($sCur, $g_bDomainLinks)
+	If $sNorm <> "" Then $sCur = $sNorm
+	_ShowClean($hCleanDisplay, $sCur)
+EndFunc   ;==>_RefreshCleanDisplay
+; Zeigt den bereinigten Link nur, wenn wirklich etwas entfernt wurde - sonst einen grauen Platzhalter
+Func _ShowClean($hCleanDisplay, $sIn)
+	$sIn = StringStripWS($sIn, 3)
+	If $sIn = "" Then
+		GUICtrlSetData($hCleanDisplay, "---")
+		GUICtrlSetColor($hCleanDisplay, $CLR_MUTED)
+	ElseIf _CleanURL($sIn) == $sIn Then
+		GUICtrlSetData($hCleanDisplay, "(nothing to clean - link is used as is)")
+		GUICtrlSetColor($hCleanDisplay, $CLR_MUTED)
+	Else
+		GUICtrlSetData($hCleanDisplay, _CleanURL($sIn))
+		GUICtrlSetColor($hCleanDisplay, 0x4FC3F7)
+	EndIf
+EndFunc   ;==>_ShowClean
 ; Gibt den --js-runtimes Parameter zurueck falls deno.exe vorhanden ist, sonst leer
 Func _JsRuntimeArg()
 	If FileExists($DENO_EXE) Then Return ' --js-runtimes deno:"' & $DENO_EXE & '"'
@@ -1127,7 +1142,7 @@ EndFunc   ;==>_DLErrorStatus
 Func _PlayFile($sFile)
 	If _IsWine() And FileExists($FFPLAY_EXE) Then
 		Run('"' & $FFPLAY_EXE & '" -window_title "MultiDL" -loglevel error "' & $sFile & '"')
-		_HideCMDConsole()
+		_HideWineConsole()
 	Else
 		ShellExecute($sFile)
 	EndIf
@@ -1145,10 +1160,10 @@ EndFunc   ;==>_PlayFile
 ;  ist von diesem Konsolen-Fenster komplett getrennt - die wird
 ;  hier also nicht mitversteckt.
 ; ============================================================
-Func _HideCMDConsole()
+Func _HideWineConsole()
 	Local $hConsole = WinWait("[REGEXPTITLE:(?i).*ffplay\.exe.*]", "", 3)
 	If $hConsole <> 0 Then WinSetState($hConsole, "", @SW_HIDE)
-EndFunc   ;==>_HideCMDConsole
+EndFunc   ;==>_HideWineConsole
 ; ============================================================
 ;  Live-View: yt-dlp starten, Datei oeffnen
 ; ============================================================
@@ -2230,7 +2245,7 @@ Func BP_FFStart($f, $iSs = 0) ; video through ffplay (own window): used under Wi
 	If $BP_fFull Then $c &= ' -fs'
 	$BP_pFF = Run($c & ' "' & $f & '"', @ScriptDir)
 	If $BP_pFF = 0 Then Return False
-	_HideCMDConsole()
+	_HideWineConsole() ; the ffplay console window shows up under Windows too
 	$BP_fFF = True
 	BP_Log("video via ffplay: " & $f)
 	Return True
@@ -2467,6 +2482,10 @@ Func BP_Tick()
 	Else
 		$m = BP_Mci("status bp mode")
 		$ended = ($m <> "playing")
+	EndIf
+	If $ended And $BP_fFF And $BP_iLen > 0 And (TimerDiff($BP_tStart) > 5000 Or $BP_iOff > 0) And TimerDiff($BP_tCmd) > 3000 And BP_Pos() < $BP_iLen - 3 Then
+		BP_Stop() ; ffplay was closed before the end (ESC / window X) -> stop, don't jump to the next track
+		Return
 	EndIf
 	If $ended And TimerDiff($BP_tCmd) > (BP_IsVid($BP_aPl[$BP_iCur]) ? 3000 : 600) Then ; track finished (or failed to open)
 		Local $bad = TimerDiff($BP_tStart) < 5000 And $BP_iOff = 0
