@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.3.0.4
+#AutoIt3Wrapper_Res_Fileversion=8.4.0.0
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -37,9 +37,10 @@
 #include <TrayConstants.au3>
 #include <TabConstants.au3>
 ; ---- Konstanten ----
-Global Const $APP_TITLE = "BrAiNee's MultiDL v8.3"
-Global Const $BIN_DIR = @ScriptDir & "\bin"
-Global Const $DL_DIR = @ScriptDir & "\MultiDL-Downloads"
+Global Const $APP_TITLE = "BrAiNee's MultiDL v8.4"
+Global Const $APP_DIR = (@Compiled And StringLeft(@ScriptName, 1) = "~") ? StringLeft(@ScriptDir, StringInStr(@ScriptDir, "\", 0, -1) - 1) : @ScriptDir ; folder of MultiDL.exe (the ~ copy runs from bin)
+Global Const $BIN_DIR = $APP_DIR & "\bin"
+Global Const $DL_DIR = $APP_DIR & "\MultiDL-Downloads"
 Global Const $YTDLP_EXE = $BIN_DIR & "\yt-dlp.exe"
 Global Const $FFMPEG_EXE = $BIN_DIR & "\ffmpeg.exe"
 Global Const $DENO_EXE = $BIN_DIR & "\deno.exe"
@@ -51,8 +52,15 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.3.0.4"
+Global Const $APP_VERSION = "8.4.0.0"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
+; ---- Start from a copy (~MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
+_SelfRelaunch()
+Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
+Global $g_sPlayReq = "" ; file the main loop should open in BrAiNPlay (Play last File / live view)
+Global $g_bPLManual = False ; True after a playlist was loaded by hand -> the player no longer follows the download folder
+Global $g_sKnown = "|" ; files of the download folder the player already took care of (a REMOVEd track stays removed)
+Global $g_aSeenP[0], $g_aSeenS[0], $g_tPLSync = TimerInit(), $g_bPruneNeed = False
 ; ---- Link-Watcher / Automatik-Optionen ----
 Global Const $CFG_FILE = @AppDataDir & "\MultiDL\settings.ini"
 DirCreate(@AppDataDir & "\MultiDL")
@@ -100,10 +108,11 @@ GUISetBkColor($CLR_BG, $hGUI)
 ; Titelleiste
 Local $hTitleBar = GUICtrlCreateLabel("", 0, 0, 560, 36)
 GUICtrlSetBkColor($hTitleBar, $CLR_PANEL)
-Local $hTitleText = GUICtrlCreateLabel($APP_TITLE, 38, 9, 200, 20)
+Local $hTitleText = GUICtrlCreateLabel($APP_TITLE, 20, 9, 150, 20)
 GUICtrlSetFont($hTitleText, 10, 700, 0, "Segoe UI")
 GUICtrlSetColor($hTitleText, $CLR_TEXT)
 GUICtrlSetBkColor($hTitleText, $CLR_PANEL)
+GUICtrlSetTip($hTitleText, "Options")
 ; Update-Hinweis (nur sichtbar wenn neue Version gefunden wurde)
 Local $hUpdateBadge = GUICtrlCreateLabel("", 246, 9, 120, 20)
 GUICtrlSetFont($hUpdateBadge, 8, 700, 0, "Segoe UI")
@@ -115,11 +124,6 @@ Local $hBtnPlayer = GUICtrlCreateLabel("BP", 460, 8, 25, 20, $SS_CENTER)
 GUICtrlSetFont($hBtnPlayer, 10, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnPlayer, $CLR_TEXT)
 GUICtrlSetBkColor($hBtnPlayer, $CLR_PANEL)
-; Optionen-Button in Titelleiste
-Local $hBtnOptions = GUICtrlCreateLabel(">", 12, 8, 24, 22)
-GUICtrlSetFont($hBtnOptions, 13, 800, 0, "Segoe UI")
-GUICtrlSetColor($hBtnOptions, $CLR_ACCENT)
-GUICtrlSetBkColor($hBtnOptions, $CLR_PANEL)
 ; Live-Button in Titelleiste
 Local $hBtnLive = GUICtrlCreateLabel(" LIVE ", 450, 8, 48, 20)
 GUICtrlSetFont($hBtnLive, 8, 700, 0, "Segoe UI")
@@ -144,19 +148,10 @@ Local $hLabelURL = GUICtrlCreateLabel("Data URL:", 24, 58, 250, 18)
 GUICtrlSetFont($hLabelURL, 9, 600, 0, "Segoe UI")
 GUICtrlSetColor($hLabelURL, $CLR_TEXT)
 GUICtrlSetBkColor($hLabelURL, $CLR_BG)
-Local $hInput = GUICtrlCreateEdit("", 24, 80, 512, 48, $ES_MULTILINE + $ES_AUTOVSCROLL + $WS_VSCROLL)
+Local $hInput = GUICtrlCreateEdit("", 24, 80, 512, 100, $ES_MULTILINE + $ES_AUTOVSCROLL + $WS_VSCROLL)
 GUICtrlSetFont($hInput, 9, 400, 0, "Consolas")
 GUICtrlSetColor($hInput, $CLR_TEXT)
 GUICtrlSetBkColor($hInput, $CLR_INPUT)
-; ---- Bereinigter Link ----
-Local $hLabelClean = GUICtrlCreateLabel("Cleaned Link:", 24, 146, 200, 18)
-GUICtrlSetFont($hLabelClean, 9, 600, 0, "Segoe UI")
-GUICtrlSetColor($hLabelClean, $CLR_MUTED)
-GUICtrlSetBkColor($hLabelClean, $CLR_BG)
-Local $hCleanDisplay = GUICtrlCreateLabel("---", 24, 166, 512, 18)
-GUICtrlSetFont($hCleanDisplay, 9, 400, 0, "Consolas")
-GUICtrlSetColor($hCleanDisplay, 0x4FC3F7)
-GUICtrlSetBkColor($hCleanDisplay, $CLR_BG)
 ; ---- Trennlinie ----
 Local $hLine2 = GUICtrlCreateLabel("", 24, 198, 512, 1)
 GUICtrlSetBkColor($hLine2, 0x2A2A2A)
@@ -173,10 +168,6 @@ Local $hToggleMP3 = GUICtrlCreateLabel("Audio(MP3)", 176, 207, 84, 26, BitOR($SS
 GUICtrlSetFont($hToggleMP3, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleMP3, $CLR_MUTED)
 GUICtrlSetBkColor($hToggleMP3, 0x222222)
-Local $hModeInfo = GUICtrlCreateLabel("", 328, 212, 208, 18)
-GUICtrlSetFont($hModeInfo, 8, 400, 0, "Segoe UI")
-GUICtrlSetColor($hModeInfo, $CLR_MUTED)
-GUICtrlSetBkColor($hModeInfo, $CLR_BG)
 ; ---- Playlist Toggle ----
 Local $hLabelPlaylist = GUICtrlCreateLabel("Mode:", 24, 244, 60, 20)
 GUICtrlSetFont($hLabelPlaylist, 9, 600, 0, "Segoe UI")
@@ -190,10 +181,6 @@ Local $hTogglePlaylist = GUICtrlCreateLabel("Multi", 176, 239, 84, 26, BitOR($SS
 GUICtrlSetFont($hTogglePlaylist, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hTogglePlaylist, $CLR_MUTED)
 GUICtrlSetBkColor($hTogglePlaylist, 0x222222)
-Local $hPlaylistInfo = GUICtrlCreateLabel("(download single file)", 356, 244, 180, 18)
-GUICtrlSetFont($hPlaylistInfo, 8, 400, 0, "Segoe UI")
-GUICtrlSetColor($hPlaylistInfo, $CLR_MUTED)
-GUICtrlSetBkColor($hPlaylistInfo, $CLR_BG)
 Local $hToggleLive = GUICtrlCreateLabel("Live", 264, 239, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
 GUICtrlSetFont($hToggleLive, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleLive, $CLR_MUTED)
@@ -510,9 +497,12 @@ GUICtrlSetState($g_hOptGUI, $GUI_HIDE)
 If Not $g_bUseBP Then GUICtrlSetState($hBtnPlayer, $GUI_HIDE) ; internal player disabled -> no BP button
 ; ---- Fenster anzeigen ----
 GUISetState(@SW_SHOW, $hGUI)
+WinActivate($hGUI)
 If $g_bClipWatch Then $g_sLastClipboard = ClipGet() ; vorhandenen Clipboard-Inhalt nicht ungefragt auto-starten
 _CheckForUpdate($hUpdateBadge)
+_ModeStatus($hStatus)
 Local $tBPUI = TimerInit()
+Local $tHov = TimerInit(), $bTitleHov = False
 ; ---- Hauptschleife ----
 Local $bDragging = False
 Local $iDragX, $iDragY
@@ -524,6 +514,52 @@ While 1
 	Local $aMsg = GUIGetMsg(1)
 	Local $iMsg = $aMsg[0]
 	If $BP_fQuit Then ExitLoop
+	; ---- app name = options button: highlight on mouse over ----
+	If TimerDiff($tHov) > 60 Then
+		$tHov = TimerInit()
+		Local $aHI = GUIGetCursorInfo($hGUI)
+		Local $bH = False
+		If IsArray($aHI) Then
+			If $aHI[0] >= 20 And $aHI[0] <= 160 And $aHI[1] >= 0 And $aHI[1] <= 36 And Not $BP_fTray Then $bH = True
+		EndIf
+		If $bH <> $bTitleHov Then
+			$bTitleHov = $bH
+			GUICtrlSetColor($hTitleText, $bH ? $CLR_ACCENT : $CLR_TEXT)
+		EndIf
+	EndIf
+	; ---- a file should be played in BrAiNPlay (Play last File and live view share this) ----
+	If $g_sPlayReq <> "" Then
+		Local $sPR = $g_sPlayReq
+		$g_sPlayReq = ""
+		If Not $BP_bPlayerMode Then
+			$BP_bPlayerMode = True
+			_ShowNormalControls($GUI_HIDE, $hLabelURL, $hInput, $hLine2, $hLabelFormat, $hToggleVideo, $hToggleMP3, $hLabelPlaylist, $hToggleSingle, $hTogglePlaylist, $hBtnDownload, $hBtnPaste, $hLine3, $hProgLabel, $hProgPct, $hProgBG, $hProgBar, $hLine4, $hBtnPlay, $hBtnFolder, $hPlayLabel, $hStatus, $hToggleLive)
+			_ShowLiveControls($GUI_HIDE, $hLiveBanner, $hLiveTitle, $hLiveLabelURL, $hLiveInput, $hLiveInfo, $hLiveBtnStart, $hLiveBtnPaste, $hLiveLine, $hLiveProgLabel, $hLiveProgSize, $hLiveProgBG, $hLiveProgBar)
+			BP_SetControls($GUI_SHOW)
+			BP_Keys(True)
+			BP_Apply()
+			BP_PLText()
+			BP_LoadDL(True)
+			GUICtrlSetBkColor($hBtnPlayer, $CLR_ACCENT)
+		EndIf
+		Local $prFound = False
+		For $prI = 0 To UBound($BP_aPl) - 1
+			If StringLower($BP_aPl[$prI]) = StringLower($sPR) Then
+				$prFound = True
+				BP_Play($prI)
+				ExitLoop
+			EndIf
+		Next
+		If Not $prFound Then
+			BP_Add($sPR)
+			BP_Play(UBound($BP_aPl) - 1)
+		EndIf
+	EndIf
+	; ---- player playlist follows the download folder (also while a download runs) ----
+	If $BP_bPlayerMode And TimerDiff($g_tPLSync) > 3000 Then
+		$g_tPLSync = TimerInit()
+		BP_LoadDL()
+	EndIf
 	; ---- Fortschritt lesen wenn Download laeuft ----
 	If $hDLProc <> 0 Then
 		If $bLiveMode Then
@@ -553,13 +589,11 @@ While 1
 			Local $sDetected = _DetectURL($sClipNow, $g_bDomainLinks)
 			If $sDetected <> "" Then
 				GUICtrlSetData($hInput, $sDetected)
-				_ShowClean($hCleanDisplay, $sDetected)
 				_UpdateStartAppearance($hBtnDownload, True)
 				_SetStatus($hStatus, "Link aus Zwischenablage erkannt.", 0x4FC3F7)
 				If $g_bAutoStart And $sDetected <> $g_sLastAutoURL And $hDLProc = 0 Then
 					$g_sLastAutoURL = $sDetected
 					Local $sAutoClean = _CleanURL($sDetected)
-					_ShowClean($hCleanDisplay, $sDetected)
 					If $bLiveMode Then
 						_StartLive($sAutoClean, $hProgBar, $hProgLabel, $hProgPct, $hBtnDownload, 364, 12)
 					Else
@@ -629,12 +663,12 @@ While 1
 			EndIf
 			;update badge
 			If $iRelX >= 246 And $iRelX <= 366 And $iRelY >= 0 And $iRelY <= 36 And BitAND(GUICtrlGetState($hUpdateBadge), $GUI_SHOW) = $GUI_SHOW Then
-				ShellExecute("https://github.com/" & $GH_REPO & "/releases/latest")
+				_SelfUpdate()
 			EndIf
 			; Minimize-Button
 			If $iRelX >= 499 And $iRelX <= 509 And $iRelY >= 0 And $iRelY <= 36 Then BP_ToTray()
 			; Optionen-Button
-			If $iRelX >= 12 And $iRelX <= 24 And $iRelY >= 0 And $iRelY <= 36 Then
+			If $iRelX >= 20 And $iRelX <= 160 And $iRelY >= 0 And $iRelY <= 36 Then
 				GUICtrlSetState($g_hOptClip, $g_bClipWatch ? $GUI_CHECKED : $GUI_UNCHECKED)
 				GUICtrlSetState($g_hOptDomain, $g_bDomainLinks ? $GUI_CHECKED : $GUI_UNCHECKED)
 				GUICtrlSetState($g_hOptAuto, $g_bAutoStart ? $GUI_CHECKED : $GUI_UNCHECKED)
@@ -647,13 +681,13 @@ While 1
 			If $iRelX >= 460 And $iRelX <= 485 And $iRelY >= 0 And $iRelY <= 36 And ($g_bUseBP Or $BP_bPlayerMode) Then
 				$BP_bPlayerMode = Not $BP_bPlayerMode
 				If $BP_bPlayerMode Then
-					_ShowNormalControls($GUI_HIDE, $hLabelURL, $hInput, $hLabelClean, $hCleanDisplay, $hLine2, $hLabelFormat, $hToggleVideo, $hToggleMP3, $hModeInfo, $hLabelPlaylist, $hToggleSingle, $hTogglePlaylist, $hPlaylistInfo, $hBtnDownload, $hBtnPaste, $hLine3, $hProgLabel, $hProgPct, $hProgBG, $hProgBar, $hLine4, $hBtnPlay, $hBtnFolder, $hPlayLabel, $hStatus, $hToggleLive)
+					_ShowNormalControls($GUI_HIDE, $hLabelURL, $hInput, $hLine2, $hLabelFormat, $hToggleVideo, $hToggleMP3, $hLabelPlaylist, $hToggleSingle, $hTogglePlaylist, $hBtnDownload, $hBtnPaste, $hLine3, $hProgLabel, $hProgPct, $hProgBG, $hProgBar, $hLine4, $hBtnPlay, $hBtnFolder, $hPlayLabel, $hStatus, $hToggleLive)
 					_ShowLiveControls($GUI_HIDE, $hLiveBanner, $hLiveTitle, $hLiveLabelURL, $hLiveInput, $hLiveInfo, $hLiveBtnStart, $hLiveBtnPaste, $hLiveLine, $hLiveProgLabel, $hLiveProgSize, $hLiveProgBG, $hLiveProgBar)
 					BP_SetControls($GUI_SHOW)
 					BP_Keys(True)
 					BP_Apply()
 					BP_PLText()
-					BP_LoadDL()
+					BP_LoadDL(True)
 					GUICtrlSetBkColor($hBtnPlayer, $CLR_ACCENT)
 					BP_VidApply()
 					If $sLastFile <> "" And FileExists($sLastFile) Then
@@ -669,7 +703,7 @@ While 1
 					BP_VidApply()
 					GUICtrlSetBkColor($hBtnPlayer, 0x222222)
 					If Not $g_bUseBP Then GUICtrlSetState($hBtnPlayer, $GUI_HIDE)
-					_ShowNormalControls($GUI_SHOW, $hLabelURL, $hInput, $hLabelClean, $hCleanDisplay, $hLine2, $hLabelFormat, $hToggleVideo, $hToggleMP3, $hModeInfo, $hLabelPlaylist, $hToggleSingle, $hTogglePlaylist, $hPlaylistInfo, $hBtnDownload, $hBtnPaste, $hLine3, $hProgLabel, $hProgPct, $hProgBG, $hProgBar, $hLine4, $hBtnPlay, $hBtnFolder, $hPlayLabel, $hStatus, $hToggleLive)
+					_ShowNormalControls($GUI_SHOW, $hLabelURL, $hInput, $hLine2, $hLabelFormat, $hToggleVideo, $hToggleMP3, $hLabelPlaylist, $hToggleSingle, $hTogglePlaylist, $hBtnDownload, $hBtnPaste, $hLine3, $hProgLabel, $hProgPct, $hProgBG, $hProgBar, $hLine4, $hBtnPlay, $hBtnFolder, $hPlayLabel, $hStatus, $hToggleLive)
 				EndIf
 			EndIf
 			; Drag nur auf freier Titelleiste: alle Titelleisten-Buttons (Options, Badge, BP, Minimize, Close) ausnehmen
@@ -715,10 +749,7 @@ While 1
 		Case $iMsg = $BP_kDel
 			If $BP_bPlayerMode Then BP_DelSel()
 		Case $iMsg = $BP_kTV
-			If $BP_bPlayerMode And $BP_fPlay And $BP_fVid Then
-				$BP_fVidOn = Not $BP_fVidOn
-				BP_VidApply()
-			EndIf
+			If $BP_bPlayerMode Then BP_ToggleVid()
 		Case $iMsg = $BP_kFull
 			If $BP_bPlayerMode Then BP_VidKey("f")
 		Case $iMsg = $BP_kWin
@@ -736,10 +767,7 @@ While 1
 		Case $iMsg = $BP_kMon
 			If $BP_bPlayerMode Then BP_NextMonitor()
 		Case $iMsg = $BP_bTV
-			If $BP_bPlayerMode And $BP_fPlay And $BP_fVid Then
-				$BP_fVidOn = Not $BP_fVidOn
-				BP_VidApply()
-			EndIf
+			If $BP_bPlayerMode Then BP_ToggleVid()
 		Case $iMsg = $BP_bPrev
 			If $BP_bPlayerMode Then BP_Prev()
 		Case $iMsg = $BP_bShuf
@@ -771,7 +799,10 @@ While 1
 		Case $iMsg = $BP_bDel
 			If $BP_bPlayerMode Then BP_DelSel()
 		Case $iMsg = $BP_bClr
-			If $BP_bPlayerMode Then BP_Clear()
+			If $BP_bPlayerMode Then
+				BP_Clear()
+				$g_bPLManual = False ; empty list: new downloads show up again
+			EndIf
 		Case $iMsg = $BP_bSave
 			If $BP_bPlayerMode And UBound($BP_aPl) Then
 				Local $bpSave = FileSaveDialog("Save playlist", "", "Playlist (*.m3u)", 16, "playlist.m3u")
@@ -786,6 +817,7 @@ While 1
 				If Not @error Then
 					BP_Clear()
 					BP_LoadList($bpLoad)
+					$g_bPLManual = True ; loaded by hand: no automatic additions any more
 				EndIf
 			EndIf
 		Case $iMsg = $BP_lst
@@ -813,6 +845,7 @@ While 1
 				GUICtrlSetData($hLiveBtnStart, "Start")
 				GUICtrlSetBkColor($hLiveBtnStart, 0x880000)
 				$BP_bPlayerOpened = False
+				BP_DropLive()
 			Else
 				Local $sRaw = GUICtrlRead($hLiveInput)
 				$sRaw = StringStripWS($sRaw, 3)
@@ -841,29 +874,26 @@ While 1
 				$bMP3Mode = False
 				$bLiveMode = False
 				$g_bLiveSel = False
-				_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $hModeInfo, 0)
-				_ModePaint($hToggleSingle, $hTogglePlaylist, $hPlaylistInfo)
-				_RefreshCleanDisplay($hInput, $hCleanDisplay)
-				_SetStatus($hStatus, "Modus: Video", $CLR_MUTED)
+				_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, 0)
+				_ModePaint($hToggleSingle, $hTogglePlaylist)
+				_ModeStatus($hStatus)
 			EndIf
 		Case $iMsg = $hToggleMP3
 			If Not ($bLiveMode And $hDLProc <> 0) Then
 				$bMP3Mode = True
 				$bLiveMode = False
 				$g_bLiveSel = False
-				_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $hModeInfo, 1)
-				_ModePaint($hToggleSingle, $hTogglePlaylist, $hPlaylistInfo)
-				_RefreshCleanDisplay($hInput, $hCleanDisplay)
-				_SetStatus($hStatus, "Modus: Audio", $CLR_MUTED)
+				_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, 1)
+				_ModePaint($hToggleSingle, $hTogglePlaylist)
+				_ModeStatus($hStatus)
 			EndIf
 		Case $iMsg = $hToggleLive
 			If $hDLProc = 0 Then
 				$bLiveMode = True
 				$g_bLiveSel = True
-				_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $hModeInfo, 2)
-				_ModePaint($hToggleSingle, $hTogglePlaylist, $hPlaylistInfo)
-				_RefreshCleanDisplay($hInput, $hCleanDisplay)
-				_SetStatus($hStatus, "Live-Modus: URL oben verwenden.", $CLR_ACCENT)
+				_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, 2)
+				_ModePaint($hToggleSingle, $hTogglePlaylist)
+				_ModeStatus($hStatus)
 			EndIf
 			; Toggle: Einzeln
 		Case $iMsg = $hToggleSingle
@@ -872,10 +902,9 @@ While 1
 					$bLiveMode = False
 					$g_bLiveSel = False
 					$BP_bPlaylistMode = False
-					_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $hModeInfo, $bMP3Mode ? 1 : 0)
-					_ModePaint($hToggleSingle, $hTogglePlaylist, $hPlaylistInfo)
-					_SetStatus($hStatus, "Mode: Single", $CLR_MUTED)
-					_RefreshCleanDisplay($hInput, $hCleanDisplay)
+					_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $bMP3Mode ? 1 : 0)
+					_ModePaint($hToggleSingle, $hTogglePlaylist)
+					_ModeStatus($hStatus)
 				EndIf
 			ElseIf $BP_bPlaylistMode Then
 				$BP_bPlaylistMode = False
@@ -883,9 +912,7 @@ While 1
 				GUICtrlSetColor($hToggleSingle, $CLR_TEXT)
 				GUICtrlSetBkColor($hTogglePlaylist, 0x222222)
 				GUICtrlSetColor($hTogglePlaylist, $CLR_MUTED)
-				GUICtrlSetData($hPlaylistInfo, "(download single file)")
-				_SetStatus($hStatus, "Mode: Single", $CLR_MUTED)
-				_RefreshCleanDisplay($hInput, $hCleanDisplay)
+				_ModeStatus($hStatus)
 			EndIf
 			; Toggle: Playlist
 		Case $iMsg = $hTogglePlaylist
@@ -894,10 +921,9 @@ While 1
 					$bLiveMode = False
 					$g_bLiveSel = False
 					$BP_bPlaylistMode = True
-					_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $hModeInfo, $bMP3Mode ? 1 : 0)
-					_ModePaint($hToggleSingle, $hTogglePlaylist, $hPlaylistInfo)
-					_SetStatus($hStatus, "Mode: Multi", $CLR_MUTED)
-					_RefreshCleanDisplay($hInput, $hCleanDisplay)
+					_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $bMP3Mode ? 1 : 0)
+					_ModePaint($hToggleSingle, $hTogglePlaylist)
+					_ModeStatus($hStatus)
 				EndIf
 			ElseIf Not $BP_bPlaylistMode Then
 				$BP_bPlaylistMode = True
@@ -905,9 +931,7 @@ While 1
 				GUICtrlSetColor($hTogglePlaylist, $CLR_TEXT)
 				GUICtrlSetBkColor($hToggleSingle, 0x222222)
 				GUICtrlSetColor($hToggleSingle, $CLR_MUTED)
-				GUICtrlSetData($hPlaylistInfo, "(download all files)")
-				_SetStatus($hStatus, "Mode: Multi", $CLR_MUTED)
-				_RefreshCleanDisplay($hInput, $hCleanDisplay)
+				_ModeStatus($hStatus)
 			EndIf
 			; Download / Stop Toggle
 		Case $iMsg = $hBtnDownload
@@ -926,6 +950,7 @@ While 1
 				GUICtrlSetPos($hProgBar, 24, 364, 0, 12)
 				GUICtrlSetBkColor($hProgBar, $CLR_ACCENT)
 				$BP_bPlayerOpened = False
+				BP_DropLive()
 				GUICtrlSetData($hProgLabel, "Stopped.")
 				GUICtrlSetData($hProgPct, "")
 				_SetStatus($hStatus, "Download stopped.", 0xFFAA00)
@@ -941,7 +966,6 @@ While 1
 					If $sNorm <> "" Then $sRaw = $sNorm
 					Local $sClean = _CleanURL($sRaw)
 					$g_sLastAutoURL = $sRaw
-					_ShowClean($hCleanDisplay, $sRaw)
 					If $bLiveMode Then
 						_StartLive($sClean, $hProgBar, $hProgLabel, $hProgPct, $hBtnDownload, 364, 12)
 					Else
@@ -960,7 +984,6 @@ While 1
 				Else
 					GUICtrlSetData($hInput, $sClip)
 					Local $sClean = _CleanURL($sClip)
-					_ShowClean($hCleanDisplay, $sClip)
 					_StartDownload($sClean, $hStatus, $hProgBar, $hProgLabel, $hProgPct)
 				EndIf
 			EndIf
@@ -969,29 +992,7 @@ While 1
 			If $sLastFile <> "" And FileExists($sLastFile) And Not $g_bUseBP And Not $BP_bPlayerMode Then
 				_PlayFile($sLastFile) ; internal player disabled -> registered system player
 			ElseIf $sLastFile <> "" And FileExists($sLastFile) Then
-				If Not $BP_bPlayerMode Then
-					$BP_bPlayerMode = True
-					_ShowNormalControls($GUI_HIDE, $hLabelURL, $hInput, $hLabelClean, $hCleanDisplay, $hLine2, $hLabelFormat, $hToggleVideo, $hToggleMP3, $hModeInfo, $hLabelPlaylist, $hToggleSingle, $hTogglePlaylist, $hPlaylistInfo, $hBtnDownload, $hBtnPaste, $hLine3, $hProgLabel, $hProgPct, $hProgBG, $hProgBar, $hLine4, $hBtnPlay, $hBtnFolder, $hPlayLabel, $hStatus, $hToggleLive)
-					_ShowLiveControls($GUI_HIDE, $hLiveBanner, $hLiveTitle, $hLiveLabelURL, $hLiveInput, $hLiveInfo, $hLiveBtnStart, $hLiveBtnPaste, $hLiveLine, $hLiveProgLabel, $hLiveProgSize, $hLiveProgBG, $hLiveProgBar)
-					BP_SetControls($GUI_SHOW)
-					BP_Keys(True)
-					BP_Apply()
-					BP_PLText()
-					BP_LoadDL()
-					GUICtrlSetBkColor($hBtnPlayer, $CLR_ACCENT)
-				EndIf
-				Local $bpFound = False
-				For $bpI = 0 To UBound($BP_aPl) - 1
-					If StringLower($BP_aPl[$bpI]) = StringLower($sLastFile) Then
-						$bpFound = True
-						BP_Play($bpI)
-						ExitLoop
-					EndIf
-				Next
-				If Not $bpFound Then
-					BP_Add($sLastFile)
-					BP_Play(UBound($BP_aPl) - 1)
-				EndIf
+				$g_sPlayReq = $sLastFile ; handled at the top of the loop
 			ElseIf $sLastFile <> "" Then
 				_SetStatus($hStatus, "File not found: " & $sLastFile, 0xFF5252)
 			Else
@@ -1006,28 +1007,25 @@ BP_Quit()
 GUIDelete($hGUI)
 Exit
 ; Single/Multi-Knoepfe neu zeichnen (bei Live ausgegraut)
-Func _ModePaint($hSingle, $hMulti, $hInfo)
+Func _ModePaint($hSingle, $hMulti)
 	If $g_bLiveSel Then
 		GUICtrlSetBkColor($hSingle, 0x222222)
 		GUICtrlSetColor($hSingle, $CLR_MUTED)
 		GUICtrlSetBkColor($hMulti, 0x222222)
 		GUICtrlSetColor($hMulti, $CLR_MUTED)
-		GUICtrlSetData($hInfo, "(watch a livestream)")
 	Else
 		GUICtrlSetBkColor($hSingle, $BP_bPlaylistMode ? 0x222222 : $CLR_ACCENT)
 		GUICtrlSetColor($hSingle, $BP_bPlaylistMode ? $CLR_MUTED : $CLR_TEXT)
 		GUICtrlSetBkColor($hMulti, $BP_bPlaylistMode ? $CLR_ACCENT : 0x222222)
 		GUICtrlSetColor($hMulti, $BP_bPlaylistMode ? $CLR_TEXT : $CLR_MUTED)
-		GUICtrlSetData($hInfo, $BP_bPlaylistMode ? "(download all files)" : "(download single file)")
 	EndIf
 EndFunc   ;==>_ModePaint
-Func _FmtPaint($hV, $hM, $hL, $hInfo, $iSel) ; 0 = Video, 1 = Audio, 2 = Live
-	Local $aH[3] = [$hV, $hM, $hL], $aT[3] = ["(best video quality)", "(best audio quality)", "(watch live stream)"]
+Func _FmtPaint($hV, $hM, $hL, $iSel) ; 0 = Video, 1 = Audio, 2 = Live
+	Local $aH[3] = [$hV, $hM, $hL]
 	For $i = 0 To 2
 		GUICtrlSetBkColor($aH[$i], $i = $iSel ? $CLR_ACCENT : 0x222222)
 		GUICtrlSetColor($aH[$i], $i = $iSel ? $CLR_TEXT : $CLR_MUTED)
 	Next
-	GUICtrlSetData($hInfo, "") ; no hint text next to the format buttons any more
 EndFunc   ;==>_FmtPaint
 ; URL-Erkennung: HTTP(S) oder Domain ohne Schema (z.B. example.de/path)
 Func _DetectURL($sText, $bAllowDomain = True)
@@ -1055,20 +1053,16 @@ EndFunc   ;==>_UpdateStartAppearance
 ; ============================================================
 ;  Show/Hide Normal Controls
 ; ============================================================
-Func _ShowNormalControls($iState, $hLabelURL, $hInput, $hLabelClean, $hCleanDisplay, $hLine2, $hLabelFormat, $hToggleVideo, $hToggleMP3, $hModeInfo, $hLabelPlaylist, $hToggleSingle, $hTogglePlaylist, $hPlaylistInfo, $hBtnDownload, $hBtnPaste, $hLine3, $hProgLabel, $hProgPct, $hProgBG, $hProgBar, $hLine4, $hBtnPlay, $hBtnFolder, $hPlayLabel, $hStatus, $hToggleLive)
+Func _ShowNormalControls($iState, $hLabelURL, $hInput, $hLine2, $hLabelFormat, $hToggleVideo, $hToggleMP3, $hLabelPlaylist, $hToggleSingle, $hTogglePlaylist, $hBtnDownload, $hBtnPaste, $hLine3, $hProgLabel, $hProgPct, $hProgBG, $hProgBar, $hLine4, $hBtnPlay, $hBtnFolder, $hPlayLabel, $hStatus, $hToggleLive)
 	GUICtrlSetState($hLabelURL, $iState)
 	GUICtrlSetState($hInput, $iState)
-	GUICtrlSetState($hLabelClean, $iState)
-	GUICtrlSetState($hCleanDisplay, $iState)
 	GUICtrlSetState($hLine2, $iState)
 	GUICtrlSetState($hLabelFormat, $iState)
 	GUICtrlSetState($hToggleVideo, $iState)
 	GUICtrlSetState($hToggleMP3, $iState)
-	GUICtrlSetState($hModeInfo, $iState)
 	GUICtrlSetState($hLabelPlaylist, $iState)
 	GUICtrlSetState($hToggleSingle, $iState)
 	GUICtrlSetState($hTogglePlaylist, $iState)
-	GUICtrlSetState($hPlaylistInfo, $iState)
 	GUICtrlSetState($hBtnDownload, $iState)
 	; PasteStart bleibt dauerhaft deaktiviert/ausgeblendet; Clipboard-Watcher übernimmt die Funktion.
 	GUICtrlSetState($hLine3, $iState)
@@ -1111,27 +1105,14 @@ Func _CleanURL($sURL)
 	EndIf
 	Return $sURL
 EndFunc   ;==>_CleanURL
-; Cleaned-Link-Anzeige neu berechnen (z.B. nach Single/Multi-Wechsel)
-Func _RefreshCleanDisplay($hInput, $hCleanDisplay)
-	Local $sCur = StringStripWS(GUICtrlRead($hInput), 3)
-	Local $sNorm = _DetectURL($sCur, $g_bDomainLinks)
-	If $sNorm <> "" Then $sCur = $sNorm
-	_ShowClean($hCleanDisplay, $sCur)
-EndFunc   ;==>_RefreshCleanDisplay
-; Zeigt den bereinigten Link nur, wenn wirklich etwas entfernt wurde - sonst einen grauen Platzhalter
-Func _ShowClean($hCleanDisplay, $sIn)
-	$sIn = StringStripWS($sIn, 3)
-	If $sIn = "" Then
-		GUICtrlSetData($hCleanDisplay, "---")
-		GUICtrlSetColor($hCleanDisplay, $CLR_MUTED)
-	ElseIf _CleanURL($sIn) == $sIn Then
-		GUICtrlSetData($hCleanDisplay, "(nothing to clean - link is used as is)")
-		GUICtrlSetColor($hCleanDisplay, $CLR_MUTED)
+; Status bar: format + mode info (replaces the hint texts next to the toggles)
+Func _ModeStatus($hStatus)
+	If $g_bLiveSel Then
+		_SetStatus($hStatus, "Live: watch a livestream", $CLR_ACCENT)
 	Else
-		GUICtrlSetData($hCleanDisplay, _CleanURL($sIn))
-		GUICtrlSetColor($hCleanDisplay, 0x4FC3F7)
+		_SetStatus($hStatus, ($bMP3Mode ? "Audio (MP3): best audio quality" : "Video (MP4): best video quality") & "   |   " & ($BP_bPlaylistMode ? "Multi: download all files of the link" : "Single: download one file"), $CLR_MUTED)
 	EndIf
-EndFunc   ;==>_ShowClean
+EndFunc   ;==>_ModeStatus
 ; Gibt den --js-runtimes Parameter zurueck falls deno.exe vorhanden ist, sonst leer
 Func _JsRuntimeArg()
 	If FileExists($DENO_EXE) Then Return ' --js-runtimes deno:"' & $DENO_EXE & '"'
@@ -1234,6 +1215,7 @@ Func _StartLive($sURL, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 	$g_sLiveCMD = $sCMD
 	$g_bIPv4Retried = False
 	$g_bBotBlock = False
+	BP_DropLive()
 	FileDelete($DL_DIR & "\_watch_live.mp4")
 	If $bShowCMD Then Run('cmd.exe /k "' & $sCMD & '"', $DL_DIR, @SW_SHOW)
 	$bDLFailed = False
@@ -1297,7 +1279,11 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 	If Not $BP_bPlayerOpened Then
 		Local $sOutFile = $DL_DIR & "\_watch_live.mp4"
 		If FileExists($sOutFile) And TimerDiff($g_iLiveStartTick) > 2000 Then
-			_PlayFile($sOutFile)
+			If $g_bUseBP Then
+				$g_sPlayReq = $sOutFile ; same logic as "Play last File": BrAiNPlay opens it
+			Else
+				_PlayFile($sOutFile)
+			EndIf
 			$BP_bPlayerOpened = True
 			If $hStatus <> 0 Then
 				If _IsWine() Then
@@ -1330,6 +1316,7 @@ Func _ReadLiveProgress($hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 		$g_bBotBlock = False
 		$bDLFailed = False
 		$sDLError = ""
+		BP_DropLive()
 		FileDelete($DL_DIR & "\_watch_live.mp4")
 		$BP_bPlayerOpened = False
 		$g_iLiveStartTick = TimerInit()
@@ -2143,12 +2130,59 @@ Func _CheckForUpdate($hUpdateBadge)
 	Local $sRemote = $aTag[0]
 	If StringLeft($sRemote, 1) = "v" Or StringLeft($sRemote, 1) = "V" Then $sRemote = StringMid($sRemote, 2)
 	If _CompareVersion($sRemote, $APP_VERSION) > 0 Then
+		$g_sRemoteVer = $sRemote
 		GUICtrlSetData($hUpdateBadge, "⬆ Update: v" & $sRemote)
 		GUICtrlSetState($hUpdateBadge, $GUI_SHOW)
 	EndIf
 EndFunc   ;==>_CheckForUpdate
 ; Vergleicht zwei Versionsstrings à la "7.1.0.2" nummerisch, Teil fuer Teil.
 ; Rueckgabe: 1 wenn $sA neuer, -1 wenn $sA aelter, 0 wenn gleich.
+; ============================================================
+;  Self update. MultiDL.exe starts a copy of itself (~MultiDL.exe) and exits, so the main file is
+;  never locked while MultiDL runs. The update only has to replace MultiDL.exe and start it again.
+; ============================================================
+Func _SelfRelaunch()
+	If Not @Compiled Then Return
+	If StringLeft(@ScriptName, 1) = "~" Then
+		FileDelete($APP_DIR & "\" & StringTrimLeft(@ScriptName, 1) & ".new") ; leftover of an update
+		Return
+	EndIf
+	DirCreate($BIN_DIR)
+	Local $sCopy = $BIN_DIR & "\~" & @ScriptName, $i, $bOK = False
+	For $i = 1 To 12 ; the copy can still be locked for a moment by the instance that just started the update
+		If FileCopy(@ScriptFullPath, $sCopy, 1) Then
+			$bOK = True
+			ExitLoop
+		EndIf
+		Sleep(250)
+	Next
+	If Not $bOK Then Return ; no write access / copy in use -> simply run from here
+	DllCall("user32.dll", "bool", "AllowSetForegroundWindow", "dword", -1) ; the new process may take the focus (else the first click only activates the window)
+	Run('"' & $sCopy & '" ' & $CmdLineRaw, $APP_DIR)
+	Exit
+EndFunc   ;==>_SelfRelaunch
+Func _SelfUpdate() ; click on the update badge
+	Local $sName = StringTrimLeft(@ScriptName, 1), $sMain = $APP_DIR & "\" & $sName, $sTmp = $sMain & ".new"
+	If Not @Compiled Or StringLeft(@ScriptName, 1) <> "~" Then
+		ShellExecute("https://github.com/" & $GH_REPO & "/releases/latest") ; not started through the copy -> just open the release page
+		Return
+	EndIf
+	If MsgBox(36, $APP_TITLE, "Update to v" & $g_sRemoteVer & " now?" & @CRLF & "MultiDL restarts afterwards.") <> 6 Then Return
+	FileDelete($sTmp)
+	If Not _Download("https://github.com/" & $GH_REPO & "/releases/latest/download/" & $sName, $sTmp) Or FileGetSize($sTmp) < 200000 Or FileRead($sTmp, 2) <> "MZ" Then
+		FileDelete($sTmp)
+		MsgBox(16, $APP_TITLE, "Update download failed." & @CRLF & "(Release needs an asset named " & $sName & ")")
+		Return
+	EndIf
+	If Not FileMove($sTmp, $sMain, 1) Then
+		FileDelete($sTmp)
+		MsgBox(16, $APP_TITLE, "Could not replace " & $sName & ".")
+		Return
+	EndIf
+	DllCall("user32.dll", "bool", "AllowSetForegroundWindow", "dword", -1)
+	Run('"' & $sMain & '"', $APP_DIR)
+	Exit
+EndFunc   ;==>_SelfUpdate
 Func _CompareVersion($sA, $sB)
 	Local $aA = StringSplit($sA, ".", 2)
 	Local $aB = StringSplit($sB, ".", 2)
@@ -2262,7 +2296,7 @@ Func BP_Play($i)
 	$BP_fPlay = True
 	$BP_fPause = False
 	BP_Apply()
-	$BP_fVid = BP_IsVid($BP_aPl[$i]) And $BP_fEmb And $ok ; TV button / window only if the video really sits in our window
+	$BP_fVid = BP_IsVid($BP_aPl[$i]) And ($BP_fEmb Or $BP_fFF) And $ok ; TV button / window only if the video really sits in our window
 	$BP_iVSz = 0
 	$BP_sWin = "" ; (window mode: size + center the window again for this video)
 	BP_VidApply()
@@ -2287,8 +2321,12 @@ Func BP_FFStart($f, $iSs = 0) ; video through ffplay (own window): used under Wi
 	BP_FFKill()
 	Local $c = '"' & $FFPLAY_EXE & '" -autoexit -loglevel error -window_title "MultiDL BrAiNPlay" -volume ' & $BP_iVol
 	If $iSs > 0 Then $c &= ' -ss ' & Int($iSs)
-	If $BP_fFull Then $c &= ' -fs'
-	$BP_pFF = Run($c & ' "' & $f & '"', @ScriptDir)
+	If Not $BP_fVidOn Then
+		$c &= ' -nodisp' ; VIDEO OFF: sound only
+	ElseIf $BP_fFull Then
+		$c &= ' -fs'
+	EndIf
+	$BP_pFF = Run($c & ' "' & $f & '"', $APP_DIR)
 	If $BP_pFF = 0 Then Return False
 	_HideWineConsole() ; the ffplay console window shows up under Windows too
 	$BP_fFF = True
@@ -2298,7 +2336,7 @@ EndFunc   ;==>BP_FFStart
 Func BP_FFLen($f) ; duration in seconds via ffprobe (0 = unknown)
 	Local $sProbe = $BIN_DIR & "\ffprobe.exe"
 	If Not FileExists($sProbe) Then Return 0
-	Local $h = Run('"' & $sProbe & '" -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "' & $f & '"', @ScriptDir, @SW_HIDE, 2)
+	Local $h = Run('"' & $sProbe & '" -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "' & $f & '"', $APP_DIR, @SW_HIDE, 2)
 	If Not $h Then Return 0
 	Local $o = "", $t = TimerInit()
 	While ProcessExists($h) And TimerDiff($t) < 5000
@@ -2318,7 +2356,7 @@ Func BP_Open($f) ; open + play, True if no error. MCI first; a video MCI can't p
 	BP_Mci("close bp")
 	$BP_fEmb = False
 	Local $vid = BP_IsVid($f), $c = 'open "' & $f & '" alias bp', $e
-	If $vid And $BP_fWine And FileExists($FFPLAY_EXE) Then Return BP_FFStart($f) ; Wine/Linux: MCI and WMP have no video support -> ffplay
+	If $vid And FileExists($FFPLAY_EXE) And ($BP_fWine Or StringRight($f, 15) = "_watch_live.mp4") Then Return BP_FFStart($f) ; (the growing live file always goes through ffplay) ; Wine/Linux: MCI and WMP have no video support -> ffplay
 	If $vid Then
 		BP_Log("video via MCI: " & $f)
 		Sleep(60) ; let MCI finish tearing down the previous video window
@@ -2509,7 +2547,7 @@ Func BP_Tick()
 		GUICtrlSetData($BP_lblNow, $BP_fPlay ? $BP_sNow : "stopped")
 	EndIf
 	BP_FillLen()
-	If $BP_fPlay And $BP_fVid And $BP_fVidOn And Not $BP_fTray And TimerDiff($BP_tStart) > 500 And Not BitAND(WinGetState($BP_hVid), 2) Then ; video is wanted but its window is gone (e.g. after a track change) -> bring it back
+	If $BP_fPlay And $BP_fVid And $BP_fVidOn And Not $BP_fTray And Not $BP_fFF And TimerDiff($BP_tStart) > 500 And Not BitAND(WinGetState($BP_hVid), 2) Then ; video is wanted but its window is gone (e.g. after a track change) -> bring it back
 		BP_Log("video window was hidden, showing it again")
 		BP_VidApply()
 	EndIf
@@ -2546,7 +2584,7 @@ Func BP_Tick()
 		EndIf
 		Return
 	EndIf
-	If $BP_fVid And $BP_iVSz = 0 And TimerDiff($BP_tStart) > 800 And (Not $BP_fWmp Or $m = 3) Then ; video size is known by now (WMP: playing) -> fit it / WMP: go fullscreen
+	If $BP_fVid And Not $BP_fFF And $BP_iVSz = 0 And TimerDiff($BP_tStart) > 800 And (Not $BP_fWmp Or $m = 3) Then ; video size is known by now (WMP: playing) -> fit it / WMP: go fullscreen
 		$BP_iVSz = 1
 		BP_VideoSize()
 		If $BP_fFull And Not $BP_fWmp Then BP_Osd($BP_sNow, 4000) ; track title over the fullscreen video (WMP: when it enters fullscreen)
@@ -2787,16 +2825,21 @@ Func BP_AddDir($d)
 		FileClose($h)
 	Next
 EndFunc   ;==>BP_AddDir
-Func BP_LoadDL() ; put the download folder into the playlist (only files that are not in it yet, temp files starting with _ are skipped)
-	If Not FileExists($DL_DIR) Or $hDLProc <> 0 Then Return ; not while a download runs (half-finished fragments would end up in the list)
-	Local $h, $f, $p, $n, $bHave
+Func BP_LoadDL($bFull = False) ; download folder -> playlist: only files the player did not handle yet ($bFull = everything again). Not after a manually loaded playlist.
+	If $g_bPLManual Or Not FileExists($DL_DIR) Then Return
+	If $bFull Then $g_sKnown = "|"
+	If $hDLProc <> 0 Then $g_bPruneNeed = True
+	Local $h, $f, $p, $n, $bHave, $k
 	For $e In StringSplit($BP_sExt, "|", 2)
 		$h = FileFindFirstFile($DL_DIR & "\*." & $e)
+		If $h = -1 Then ContinueLoop
 		While 1
 			$f = FileFindNextFile($h)
 			If @error Then ExitLoop
-			If StringLeft($f, 1) = "_" Then ContinueLoop
+			If StringLeft($f, 1) = "_" Or StringRegExp($f, "(?i)\.(f\d+|temp)\.[^.]+$") Then ContinueLoop ; temp files / yt-dlp part streams
 			$p = BP_Norm($DL_DIR & "\" & $f)
+			$k = "|" & StringLower($p) & "|"
+			If StringInStr($g_sKnown, $k) Then ContinueLoop
 			$bHave = False
 			For $n = 0 To UBound($BP_aPl) - 1
 				If StringLower($BP_aPl[$n]) = StringLower($p) Then
@@ -2804,11 +2847,62 @@ Func BP_LoadDL() ; put the download folder into the playlist (only files that ar
 					ExitLoop
 				EndIf
 			Next
-			If Not $bHave Then BP_Add($p)
+			If Not $bHave Then
+				If $hDLProc <> 0 And Not BP_Stable($p) Then ContinueLoop ; still being written
+				BP_Add($p)
+			EndIf
+			$g_sKnown &= StringTrimLeft($k, 1)
 		WEnd
 		FileClose($h)
 	Next
+	If $g_bPruneNeed Then BP_PruneDL()
 EndFunc   ;==>BP_LoadDL
+Func BP_Stable($p) ; while a download runs: a file counts as finished when its size did not change since the last scan
+	Local $sz = FileGetSize($p), $k, $bSame
+	For $k = 0 To UBound($g_aSeenP) - 1
+		If $g_aSeenP[$k] = $p Then
+			$bSame = ($g_aSeenS[$k] = $sz)
+			$g_aSeenS[$k] = $sz
+			Return $bSame
+		EndIf
+	Next
+	$k = UBound($g_aSeenP)
+	ReDim $g_aSeenP[$k + 1]
+	ReDim $g_aSeenS[$k + 1]
+	$g_aSeenP[$k] = $p
+	$g_aSeenS[$k] = $sz
+	Return False
+EndFunc   ;==>BP_Stable
+Func BP_PruneDL() ; entries of the download folder whose file is gone (yt-dlp intermediates) leave the list again
+	If $hDLProc = 0 Then $g_bPruneNeed = False
+	Local $i, $bCh = False
+	For $i = UBound($BP_aPl) - 1 To 0 Step -1
+		If $i <> $BP_iCur And StringInStr($BP_aPl[$i], $DL_DIR & "\") = 1 And Not FileExists($BP_aPl[$i]) Then
+			_ArrayDelete($BP_aPl, $i)
+			_ArrayDelete($BP_aLn, $i)
+			If $BP_iCur > $i Then $BP_iCur -= 1
+			$bCh = True
+		EndIf
+	Next
+	If $bCh Then BP_Refresh()
+EndFunc   ;==>BP_PruneDL
+Func BP_DropLive() ; live download stopped / restarted: take the live file out of the player
+	Local $i, $bCh = False
+	For $i = UBound($BP_aPl) - 1 To 0 Step -1
+		If StringRight($BP_aPl[$i], 15) = "_watch_live.mp4" Then
+			If $i = $BP_iCur Then
+				BP_Stop()
+				$BP_iCur = -1
+			ElseIf $BP_iCur > $i Then
+				$BP_iCur -= 1
+			EndIf
+			_ArrayDelete($BP_aPl, $i)
+			_ArrayDelete($BP_aLn, $i)
+			$bCh = True
+		EndIf
+	Next
+	If $bCh Then BP_Refresh()
+EndFunc   ;==>BP_DropLive
 Func BP_DelSel()
 	Local $s = GUICtrlSendMsg($BP_lst, $LB_GETCURSEL, 0, 0)
 	If $s < 0 Then Return
@@ -2882,6 +2976,7 @@ Func BP_SaveList($sPath)
 	If $h = -1 Then Return False
 	FileWriteLine($h, "#EXTM3U")
 	For $i = 0 To UBound($BP_aPl) - 1
+		If StringRight($BP_aPl[$i], 15) = "_watch_live.mp4" Then ContinueLoop ; temp file
 		FileWriteLine($h, "#EXTINF:" & Int($BP_aLn[$i]) & "," & BP_Name($BP_aPl[$i]))
 		FileWriteLine($h, $BP_aPl[$i])
 	Next
@@ -2927,7 +3022,7 @@ Func BP_VidApply() ; TV button + video window follow: current track is a video? 
 	GUICtrlSetData($BP_bTV, $BP_fVidOn ? "VIDEO ON" : "VIDEO OFF")
 	GUICtrlSetBkColor($BP_bTV, $BP_fVidOn ? $BP_ACC : 0x3A3A3A)
 	GUICtrlSetColor($BP_bTV, $BP_TXT)
-	If $on And $BP_fVidOn And Not $BP_fTray Then
+	If $on And $BP_fVidOn And Not $BP_fTray And Not $BP_fFF Then ; (ffplay has its own window)
 		BP_VidStyle()
 		BP_Dock()
 		GUISetState(@SW_SHOWNOACTIVATE, $BP_hVid)
@@ -2973,8 +3068,24 @@ Func BP_VidStyle() ; 0 = fullscreen (borderless) | 1 = window (title bar) | 2 = 
 	WinSetTrans($BP_hVid, "", $m = 2 ? 0 : 255)
 	DllCall("user32.dll", "bool", "SetWindowPos", "hwnd", $BP_hVid, "hwnd", 0, "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x37) ; frame changed
 EndFunc   ;==>BP_VidStyle
+Func BP_ToggleVid() ; TV button / V key
+	If Not ($BP_fPlay And $BP_fVid) Then Return
+	$BP_fVidOn = Not $BP_fVidOn
+	If $BP_fFF And Not $BP_fPause Then ; ffplay can't hide its picture while running: restart at the same second, with or without picture
+		Local $s = BP_Pos()
+		BP_FFStart($BP_aPl[$BP_iCur], $s)
+		$BP_tCmd = TimerInit()
+		$BP_iOff = $s
+		$BP_tRun = TimerInit()
+	EndIf
+	BP_VidApply()
+EndFunc   ;==>BP_ToggleVid
 Func BP_VidKey($k) ; f = fullscreen on/off | w = window (video size) on/off | Esc = video off  (MCI videos; WMP videos are fullscreen only)
 	If Not ($BP_fPlay And $BP_fVid) Then Return
+	If $BP_fFF Then ; ffplay: Esc = picture off, F / W = picture on
+		If ($k = "esc" And $BP_fVidOn) Or ($k <> "esc" And Not $BP_fVidOn) Then BP_ToggleVid()
+		Return
+	EndIf
 	If $BP_fVidShown And Not $BP_fFull And Not $BP_fWmp Then BP_MonRemember() ; window was maybe dragged to another monitor -> fullscreen goes there
 	Switch $k
 		Case "f"
