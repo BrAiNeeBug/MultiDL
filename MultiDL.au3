@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.3.0.1
+#AutoIt3Wrapper_Res_Fileversion=8.3.0.2
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -51,7 +51,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.3.0.1"
+Global Const $APP_VERSION = "8.3.0.2"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Link-Watcher / Automatik-Optionen ----
 Global Const $CFG_FILE = @AppDataDir & "\MultiDL\settings.ini"
@@ -181,15 +181,15 @@ Local $hLabelPlaylist = GUICtrlCreateLabel("Mode:", 24, 244, 60, 20)
 GUICtrlSetFont($hLabelPlaylist, 9, 600, 0, "Segoe UI")
 GUICtrlSetColor($hLabelPlaylist, $CLR_MUTED)
 GUICtrlSetBkColor($hLabelPlaylist, $CLR_BG)
-Local $hToggleSingle = GUICtrlCreateLabel("  Single  ", 88, 239, 90, 26)
+Local $hToggleSingle = GUICtrlCreateLabel("Single", 88, 239, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
 GUICtrlSetFont($hToggleSingle, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleSingle, $CLR_TEXT)
 GUICtrlSetBkColor($hToggleSingle, $CLR_ACCENT)
-Local $hTogglePlaylist = GUICtrlCreateLabel("  Multi  ", 178, 239, 90, 26)
+Local $hTogglePlaylist = GUICtrlCreateLabel("Multi", 176, 239, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
 GUICtrlSetFont($hTogglePlaylist, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hTogglePlaylist, $CLR_MUTED)
 GUICtrlSetBkColor($hTogglePlaylist, 0x222222)
-Local $hPlaylistInfo = GUICtrlCreateLabel("(download single file)", 278, 244, 160, 18)
+Local $hPlaylistInfo = GUICtrlCreateLabel("(download single file)", 328, 244, 208, 18)
 GUICtrlSetFont($hPlaylistInfo, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hPlaylistInfo, $CLR_MUTED)
 GUICtrlSetBkColor($hPlaylistInfo, $CLR_BG)
@@ -532,8 +532,8 @@ While 1
 		EndIf
 	EndIf
 	; ---- embedded BrAiNPlay runtime ----
-	If $BP_bPlayerMode Then
-		If $BP_iDrag Then BP_Drag()
+	If $BP_bPlayerMode And $BP_iDrag Then BP_Drag()
+	If $BP_bPlayerMode Or $BP_fPlay Then ; the player keeps going (next track, video) while the download view is shown
 		If $BP_fVidShown And TimerDiff($BP_tPoll) > 30 Then
 			$BP_tPoll = TimerInit()
 			BP_VidPoll()
@@ -544,7 +544,7 @@ While 1
 		EndIf
 	EndIf
 	; ---- Zwischenablage überwachen (nicht blockierend) ----
-	If Not $BP_bPlayerMode And $g_bClipWatch And TimerDiff($g_tClipPoll) >= 450 Then
+	If $g_bClipWatch And ($g_bAutoStart Or Not $BP_bPlayerMode) And TimerDiff($g_tClipPoll) >= 450 Then
 		$g_tClipPoll = TimerInit()
 		Local $sClipNow = ClipGet()
 		If Not @error And $sClipNow <> "" And $sClipNow <> $g_sLastClipboard Then
@@ -643,7 +643,7 @@ While 1
 				GUISetState(@SW_SHOW, $g_hOptGUI)
 			EndIf
 			; PLAYER-Button
-			If $iRelX >= 460 And $iRelX <= 485 And $iRelY >= 0 And $iRelY <= 36 And $hDLProc = 0 And ($g_bUseBP Or $BP_bPlayerMode) Then
+			If $iRelX >= 460 And $iRelX <= 485 And $iRelY >= 0 And $iRelY <= 36 And ($g_bUseBP Or $BP_bPlayerMode) Then
 				$BP_bPlayerMode = Not $BP_bPlayerMode
 				If $BP_bPlayerMode Then
 					_ShowNormalControls($GUI_HIDE, $hLabelURL, $hInput, $hLabelClean, $hCleanDisplay, $hLine2, $hLabelFormat, $hToggleVideo, $hToggleMP3, $hModeInfo, $hLabelPlaylist, $hToggleSingle, $hTogglePlaylist, $hPlaylistInfo, $hBtnDownload, $hBtnPaste, $hLine3, $hProgLabel, $hProgPct, $hProgBG, $hProgBar, $hLine4, $hBtnPlay, $hBtnFolder, $hPlayLabel, $hStatus, $hToggleLive)
@@ -1490,43 +1490,42 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 	GUICtrlSetData($hProgPct, "100%")
 	GUICtrlSetData($hProgLabel, "Download DONE!")
 	_SetStatus($hStatus, "DONE! Saved to: " & $DL_DIR, 0x00AA44)
-	If Not $BP_bPlaylistMode Then
-		If $sLastFile = "" Or Not FileExists($sLastFile) Then
-			Local $sSearch = FileFindFirstFile($DL_DIR & "\*.*")
-			Local $sNewest = ""
-			Local $tNewest = 0
-			If $sSearch <> -1 Then
-				Local $sFound = FileFindNextFile($sSearch)
-				While Not @error
-					Local $sFullPath = $DL_DIR & "\" & $sFound
-					Local $sExt = StringLower(StringRight($sFound, 4))
-					If $sExt = ".mp4" Or $sExt = ".mp3" Or $sExt = ".mkv" Or $sExt = ".webm" Then
-						Local $tFile = FileGetTime($sFullPath, 0, 1)
-						If $tFile > $tNewest Then
-							$tNewest = $tFile
-							$sNewest = $sFullPath
-						EndIf
+	If $sLastFile = "" Or Not FileExists($sLastFile) Then
+		Local $sSearch = FileFindFirstFile($DL_DIR & "\*.*")
+		Local $sNewest = ""
+		Local $tNewest = 0
+		If $sSearch <> -1 Then
+			Local $sFound = FileFindNextFile($sSearch)
+			While Not @error
+				Local $sFullPath = $DL_DIR & "\" & $sFound
+				Local $sExt = StringLower(StringRight($sFound, 4))
+				If $sExt = ".mp4" Or $sExt = ".mp3" Or $sExt = ".mkv" Or $sExt = ".webm" Then
+					Local $tFile = FileGetTime($sFullPath, 0, 1)
+					If $tFile > $tNewest Then
+						$tNewest = $tFile
+						$sNewest = $sFullPath
 					EndIf
-					$sFound = FileFindNextFile($sSearch)
-				WEnd
-				FileClose($sSearch)
-			EndIf
-			If $sNewest <> "" Then $sLastFile = $sNewest
+				EndIf
+				$sFound = FileFindNextFile($sSearch)
+			WEnd
+			FileClose($sSearch)
 		EndIf
-		GUICtrlSetBkColor($hBtnPlay, 0x00AA44)
-		GUICtrlSetColor($hBtnPlay, $CLR_TEXT)
-		If $sLastFile <> "" Then
-			Local $sDispName = $sLastFile
-			Local $iSlash = StringInStr($sDispName, "\", 0, -1)
-			If $iSlash > 0 Then $sDispName = StringMid($sDispName, $iSlash + 1)
-			If StringLen($sDispName) > 60 Then $sDispName = StringLeft($sDispName, 60) & "..."
-			GUICtrlSetData($hPlayLabel, "> " & $sDispName)
-			GUICtrlSetColor($hPlayLabel, 0x00AA44)
-		EndIf
+		If $sNewest <> "" Then $sLastFile = $sNewest
+	EndIf
+	GUICtrlSetBkColor($hBtnPlay, 0x00AA44)
+	GUICtrlSetColor($hBtnPlay, $CLR_TEXT)
+	If $sLastFile <> "" Then
+		Local $sDispName = $sLastFile
+		Local $iSlash = StringInStr($sDispName, "\", 0, -1)
+		If $iSlash > 0 Then $sDispName = StringMid($sDispName, $iSlash + 1)
+		If StringLen($sDispName) > 60 Then $sDispName = StringLeft($sDispName, 60) & "..."
+		GUICtrlSetData($hPlayLabel, "> " & $sDispName)
+		GUICtrlSetColor($hPlayLabel, 0x00AA44)
 	EndIf
 	$hDLProc = 0
 	GUICtrlSetData($hBtnDownload, "Start")
 	GUICtrlSetBkColor($hBtnDownload, 0x00AA44)
+	BP_LoadDL() ; new files go into the BrAiNPlay playlist right away (player visible or not)
 EndFunc   ;==>_ReadProgress
 ; ============================================================
 ;  Eine yt-dlp Output-Zeile auswerten
@@ -2743,7 +2742,7 @@ Func BP_AddDir($d)
 	Next
 EndFunc   ;==>BP_AddDir
 Func BP_LoadDL() ; put the download folder into the playlist (only files that are not in it yet, temp files starting with _ are skipped)
-	If Not FileExists($DL_DIR) Then Return
+	If Not FileExists($DL_DIR) Or $hDLProc <> 0 Then Return ; not while a download runs (half-finished fragments would end up in the list)
 	Local $h, $f, $p, $n, $bHave
 	For $e In StringSplit($BP_sExt, "|", 2)
 		$h = FileFindFirstFile($DL_DIR & "\*." & $e)
