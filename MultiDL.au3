@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.4.0.0
+#AutoIt3Wrapper_Res_Fileversion=8.4.0.1
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -52,7 +52,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.4.0.0"
+Global Const $APP_VERSION = "8.4.0.1"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (~MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 _SelfRelaunch()
@@ -314,6 +314,7 @@ If $BP_iWw < 320 Or $BP_iWh < 180 Then
 	$BP_iWw = 640
 	$BP_iWh = 360
 EndIf
+Global $BP_iFFVol = -1, $BP_iFFBal = 0, $BP_tFFApply = 0 ; ffplay: volume/balance it was started with + time of the last change
 Global $BP_fQuit = False, $BP_hVid = 0, $BP_fFull = (IniRead($BP_sIni, "player", "full", "1") = "1"), $BP_fVidShown = False, $BP_sPos = "", $BP_sWin = "", $BP_iSty = 0, $BP_iMon = 0, $BP_fWFS = False, $BP_fClick = (IniRead($BP_sIni, "video", "clickmode", "1") = "1"), $BP_tChg = 0, $BP_bDown = False, $BP_tPoll = 0
 Global $BP_iZoom = 100, $BP_tNote = 0, $BP_hOsd = 0, $BP_lblOsd = 0, $BP_tOsd = 0, $BP_iOsdMs = 3000, $BP_fWK = False
 Global $BP_fCurOn = True, $BP_iMx = -1, $BP_iMy = -1, $BP_tMouse = 0, $BP_fAwake = False
@@ -331,7 +332,7 @@ TraySetOnEvent($TRAY_EVENT_PRIMARYUP, "BP_FromTray") ; single click on the tray 
 OnAutoItExitRegister("BP_Quit")
 ; Embedded BrAiNPlay controls, styled like MultiDL.
 Global $BP_bTV = BP_B("VIDEO ON", 452, 48, 84, 24, $BP_TXT, 9)
-GUICtrlSetTip($BP_bTV, "Show / hide the video   (F = fullscreen, W = window)")
+GUICtrlSetTip($BP_bTV, "Show / hide the video   (V = video on/off, F = fullscreen / window)")
 Global $BP_lblNow = GUICtrlCreateLabel("stopped", 24, 54, 424, 20)
 GUICtrlSetColor($BP_lblNow, $BP_TXT)
 GUICtrlSetFont($BP_lblNow, 9, 600, 0, "Segoe UI")
@@ -380,9 +381,9 @@ Global $BP_bLoad = BP_B("LOAD", 444, 462, 92, 34, $BP_TXT, 8)
 Global $BP_kPlay = GUICtrlCreateDummy(), $BP_kStop = GUICtrlCreateDummy(), $BP_kNext = GUICtrlCreateDummy(), $BP_kPrev = GUICtrlCreateDummy()
 Global $BP_kBack = GUICtrlCreateDummy(), $BP_kFwd = GUICtrlCreateDummy(), $BP_kVU = GUICtrlCreateDummy(), $BP_kVD = GUICtrlCreateDummy()
 Global $BP_kMute = GUICtrlCreateDummy(), $BP_kDel = GUICtrlCreateDummy(), $BP_kTV = GUICtrlCreateDummy(), $BP_kFull = GUICtrlCreateDummy()
-Global $BP_kWin = GUICtrlCreateDummy(), $BP_kEsc = GUICtrlCreateDummy(), $BP_kZI = GUICtrlCreateDummy(), $BP_kZO = GUICtrlCreateDummy()
+Global $BP_kZI = GUICtrlCreateDummy(), $BP_kZO = GUICtrlCreateDummy()
 Global $BP_kZ0 = GUICtrlCreateDummy(), $BP_kAud = GUICtrlCreateDummy(), $BP_kMon = GUICtrlCreateDummy()
-Global $BP_aK[21][2] = [["{SPACE}", $BP_kPlay], ["s", $BP_kStop], ["n", $BP_kNext], ["p", $BP_kPrev], ["{LEFT}", $BP_kBack], ["{RIGHT}", $BP_kFwd], ["^{UP}", $BP_kVU], ["^{DOWN}", $BP_kVD], ["m", $BP_kMute], ["{DEL}", $BP_kDel], ["v", $BP_kTV], ["f", $BP_kFull], ["w", $BP_kWin], ["{ESC}", $BP_kEsc], ["{+}", $BP_kZI], ["{NUMPADADD}", $BP_kZI], ["-", $BP_kZO], ["{NUMPADSUB}", $BP_kZO], ["0", $BP_kZ0], ["a", $BP_kAud], ["d", $BP_kMon]]
+Global $BP_aK[19][2] = [["{SPACE}", $BP_kPlay], ["s", $BP_kStop], ["n", $BP_kNext], ["p", $BP_kPrev], ["{LEFT}", $BP_kBack], ["{RIGHT}", $BP_kFwd], ["^{UP}", $BP_kVU], ["^{DOWN}", $BP_kVD], ["m", $BP_kMute], ["{DEL}", $BP_kDel], ["v", $BP_kTV], ["f", $BP_kFull], ["{+}", $BP_kZI], ["{NUMPADADD}", $BP_kZI], ["-", $BP_kZO], ["{NUMPADSUB}", $BP_kZO], ["0", $BP_kZ0], ["a", $BP_kAud], ["d", $BP_kMon]]
 Func BP_KeyDown($vk)
 	Local $r = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", $vk)
 	Return (Not @error) And BitAND($r[0], 0x8000) <> 0
@@ -648,7 +649,16 @@ While 1
 	EndIf
 	Select
 		Case $iMsg = $GUI_EVENT_CLOSE
-			ExitLoop
+			; GUIGetMsg(1) returns the handle of the GUI that sent the close event.
+			; Closing BrAiNPlay's separate video window must not close the main app.
+			If _EscPressed() Then
+				; AutoIt turns the Esc key into a close event - Esc must never close the app (only the X button does)
+			ElseIf $aMsg[1] = $BP_hVid Then
+				$BP_fVidOn = False
+				BP_VidApply() ; hides the window + updates the VIDEO ON/OFF button (cursor, keep-awake, OSD, WMP fullscreen)
+			ElseIf $aMsg[1] = $hGUI Then
+				ExitLoop
+			EndIf
 		Case $iMsg = $GUI_EVENT_PRIMARYDOWN
 			If $BP_bPlayerMode Then
 				Local $bpCInfo = GUIGetCursorInfo($hGUI)
@@ -760,10 +770,6 @@ While 1
 			If $BP_bPlayerMode Then BP_ToggleVid()
 		Case $iMsg = $BP_kFull
 			If $BP_bPlayerMode Then BP_VidKey("f")
-		Case $iMsg = $BP_kWin
-			If $BP_bPlayerMode Then BP_VidKey("w")
-		Case $iMsg = $BP_kEsc
-			If $BP_bPlayerMode Then BP_VidKey("esc")
 		Case $iMsg = $BP_kZI
 			If $BP_bPlayerMode Then BP_Zoom(10)
 		Case $iMsg = $BP_kZO
@@ -2269,6 +2275,10 @@ Func _SanitizeFilename($sName)
 EndFunc   ;==>_SanitizeFilename
 ; ============================================================
 ; BrAiNPlay embedded engine (CURRENT brainplay(5).au3 core)
+Func _EscPressed() ; True while Esc is down (or was just tapped)
+	Local $r = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", 0x1B)
+	Return IsArray($r) And BitAND($r[0], 0x8001) <> 0
+EndFunc   ;==>_EscPressed
 Func BP_Mci($sCMD)
 	Local $t = DllStructCreate("wchar[256]")
 	Local $r = DllCall("winmm.dll", "dword", "mciSendStringW", "wstr", $sCMD, "ptr", DllStructGetPtr($t), "uint", 255, "ptr", 0)
@@ -2329,6 +2339,12 @@ Func BP_FFStart($f, $iSs = 0) ; video through ffplay (own window): used under Wi
 	BP_FFKill()
 	Local $c = '"' & $FFPLAY_EXE & '" -autoexit -loglevel error -window_title "MultiDL BrAiNPlay" -volume ' & $BP_iVol
 	If $iSs > 0 Then $c &= ' -ss ' & Int($iSs)
+	If $BP_iBal <> 0 Then ; ffplay has no balance option -> pan filter (mono sources are upmixed to stereo first)
+		Local $gl = $BP_iBal > 0 ? (100 - $BP_iBal) / 100 : 1, $gr = $BP_iBal < 0 ? (100 + $BP_iBal) / 100 : 1
+		$c &= ' -af "aformat=channel_layouts=stereo,pan=stereo|c0=' & StringFormat("%.2f", $gl) & '*c0|c1=' & StringFormat("%.2f", $gr) & '*c1"'
+	EndIf
+	$BP_iFFVol = $BP_iVol
+	$BP_iFFBal = $BP_iBal
 	If Not $BP_fVidOn Then
 		$c &= ' -nodisp' ; VIDEO OFF: sound only
 	ElseIf $BP_fFull Then
@@ -2341,6 +2357,20 @@ Func BP_FFStart($f, $iSs = 0) ; video through ffplay (own window): used under Wi
 	BP_Log("video via ffplay: " & $f)
 	Return True
 EndFunc   ;==>BP_FFStart
+Func BP_FFTick() ; ffplay housekeeping (called from BP_Tick)
+	Local $rV = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", 0x56), $rF = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", 0x46) ; bit 0 = "pressed since the last call"
+	If $BP_pFF And WinActive("[TITLE:MultiDL BrAiNPlay; CLASS:SDL_app]") Then ; keys typed into the ffplay window itself
+		If Not @error And IsArray($rV) And BitAND($rV[0], 1) Then
+			BP_ToggleVid() ; V = picture off (ffplay's own V only cycles streams)
+			Return
+		EndIf
+		If IsArray($rF) And BitAND($rF[0], 1) Then $BP_fFull = Not $BP_fFull ; F toggles ffplay's own fullscreen -> just keep our state in sync
+	EndIf
+	If $BP_pFF And Not $BP_fPause And Not $BP_iDrag And $BP_tFFApply And TimerDiff($BP_tFFApply) > 400 Then
+		$BP_tFFApply = 0
+		If $BP_iVol <> $BP_iFFVol Or $BP_iBal <> $BP_iFFBal Then BP_FFRestart() ; volume / balance changed
+	EndIf
+EndFunc   ;==>BP_FFTick
 Func BP_FFLen($f) ; duration in seconds via ffprobe (0 = unknown)
 	Local $sProbe = $BIN_DIR & "\ffprobe.exe"
 	If Not FileExists($sProbe) Then Return 0
@@ -2559,6 +2589,7 @@ Func BP_Tick()
 		BP_Log("video window was hidden, showing it again")
 		BP_VidApply()
 	EndIf
+	If $BP_fFF Then BP_FFTick()
 	If Not $BP_fPlay Or $BP_fPause Then Return
 	Local $m, $ended
 	If $BP_fWmp Then ; playState: 3 playing, 2 paused, 6/7/9 loading, 8 ended, 1 stopped, 10 ready
@@ -2648,7 +2679,9 @@ Func BP_Apply()
 	If $BP_iBal > 0 Then $l = $v * (100 - $BP_iBal) / 100
 	If $BP_iBal < 0 Then $r = $v * (100 + $BP_iBal) / 100
 	If $BP_fPlay Then
-		If $BP_fWmp Then
+		If $BP_fFF Then
+			$BP_tFFApply = TimerInit() ; ffplay can't change volume/balance while running -> BP_Tick restarts it at the same second (debounced)
+		ElseIf $BP_fWmp Then
 			$BP_oWMP.settings.volume = $BP_iVol
 			$BP_oWMP.settings.balance = $BP_iBal
 		ElseIf $BP_iBal = 0 Then
@@ -3079,41 +3112,40 @@ EndFunc   ;==>BP_VidStyle
 Func BP_ToggleVid() ; TV button / V key
 	If Not ($BP_fPlay And $BP_fVid) Then Return
 	$BP_fVidOn = Not $BP_fVidOn
-	If $BP_fFF And Not $BP_fPause Then ; ffplay can't hide its picture while running: restart at the same second, with or without picture
-		Local $s = BP_Pos()
-		BP_FFStart($BP_aPl[$BP_iCur], $s)
-		$BP_tCmd = TimerInit()
-		$BP_iOff = $s
-		$BP_tRun = TimerInit()
-	EndIf
+	BP_FFRestart() ; ffplay can't hide its picture while running: restart at the same second, with or without picture
 	BP_VidApply()
 EndFunc   ;==>BP_ToggleVid
-Func BP_VidKey($k) ; f = fullscreen on/off | w = window (video size) on/off | Esc = video off  (MCI videos; WMP videos are fullscreen only)
+Func BP_FFRestart() ; restart a running ffplay video at the same second (new picture / fullscreen / volume / balance settings)
+	If Not $BP_fFF Or $BP_fPause Then Return
+	Local $s = BP_Pos()
+	BP_FFStart($BP_aPl[$BP_iCur], $s)
+	$BP_tCmd = TimerInit()
+	$BP_iOff = $s
+	$BP_tRun = TimerInit()
+EndFunc   ;==>BP_FFRestart
+Func BP_VidKey($k) ; f = fullscreen <-> window (video off -> on, fullscreen) - same in every play mode; V (video on/off) = BP_ToggleVid
 	If Not ($BP_fPlay And $BP_fVid) Then Return
-	If $BP_fFF Then ; ffplay: Esc = picture off, F / W = picture on
-		If ($k = "esc" And $BP_fVidOn) Or ($k <> "esc" And Not $BP_fVidOn) Then BP_ToggleVid()
+	If $k <> "f" Then Return
+	If $BP_fFF Then ; ffplay: no switch from outside -> restart at the same second with / without -fs
+		If $BP_fVidOn Then
+			$BP_fFull = Not $BP_fFull
+		Else
+			$BP_fVidOn = True
+			$BP_fFull = True
+		EndIf
+		BP_FFRestart()
+		BP_VidApply()
 		Return
 	EndIf
 	If $BP_fVidShown And Not $BP_fFull And Not $BP_fWmp Then BP_MonRemember() ; window was maybe dragged to another monitor -> fullscreen goes there
-	Switch $k
-		Case "f"
-			If $BP_fVidOn And $BP_fFull Then
-				$BP_fVidOn = False
-			Else
-				$BP_fVidOn = True
-				$BP_fFull = True
-			EndIf
-		Case "w"
-			If $BP_fWmp Then Return ; WMP: no window mode
-			If $BP_fVidOn And Not $BP_fFull Then
-				$BP_fFull = True
-			Else
-				$BP_fVidOn = True
-				$BP_fFull = False
-			EndIf
-		Case "esc"
-			$BP_fVidOn = False
-	EndSwitch
+	If Not $BP_fVidOn Then
+		$BP_fVidOn = True
+		$BP_fFull = True
+	ElseIf $BP_fWmp Then ; WMP has no window mode: F leaves its fullscreen = video off
+		$BP_fVidOn = False
+	Else
+		$BP_fFull = Not $BP_fFull
+	EndIf
 	$BP_sWin = ""
 	$BP_tChg = TimerInit()
 	BP_VidApply()
@@ -3174,7 +3206,7 @@ Func BP_VidPoll() ; called every ~30 ms while the video window is visible
 	If $dn And Not $BP_bDown Then ; new left click on the video
 		If BP_OverVideo(Not $BP_fFull) Then
 			If Not WinActive($BP_hMain) Then WinActivate($BP_hMain) ; keep the keyboard on the player
-			If $BP_fClick And TimerDiff($BP_tChg) > 500 Then BP_VidKey("w") ; single click: fullscreen <-> window
+			If $BP_fClick And TimerDiff($BP_tChg) > 500 Then BP_VidKey("f") ; single click: fullscreen <-> window
 		EndIf
 	EndIf
 	$BP_bDown = $dn
@@ -3299,8 +3331,8 @@ EndFunc   ;==>BP_Osd
 Func BP_WmpKeys($on) ; while WMP is fullscreen it owns the keyboard: register our keys as global hotkeys (only then)
 	If $on = $BP_fWK Then Return
 	$BP_fWK = $on
-	Local $k = StringSplit("{SPACE}|{LEFT}|{RIGHT}|{UP}|{DOWN}|^{UP}|^{DOWN}|n|p|s|m|f|a|d|{ESC}", "|", 2)
-	Local $f = StringSplit("BP_PlayPause|BP_HkBack|BP_HkFwd|BP_HkVU|BP_HkVD|BP_HkVU|BP_HkVD|BP_HkNext|BP_Prev|BP_Stop|BP_Mute|BP_HkF|BP_AudioTrack|BP_NextMonitor|BP_HkEsc", "|", 2)
+	Local $k = StringSplit("{SPACE}|{LEFT}|{RIGHT}|{UP}|{DOWN}|^{UP}|^{DOWN}|n|p|s|m|f|v|a|d", "|", 2)
+	Local $f = StringSplit("BP_PlayPause|BP_HkBack|BP_HkFwd|BP_HkVU|BP_HkVD|BP_HkVU|BP_HkVD|BP_HkNext|BP_Prev|BP_Stop|BP_Mute|BP_HkF|BP_HkV|BP_AudioTrack|BP_NextMonitor", "|", 2)
 	For $i = 0 To UBound($k) - 1
 		If $on Then
 			HotKeySet($k[$i], $f[$i])
@@ -3324,9 +3356,9 @@ EndFunc   ;==>BP_HkVD
 Func BP_HkF()
 	BP_VidKey("f")
 EndFunc   ;==>BP_HkF
-Func BP_HkEsc()
-	BP_VidKey("esc")
-EndFunc   ;==>BP_HkEsc
+Func BP_HkV()
+	BP_ToggleVid()
+EndFunc   ;==>BP_HkV
 Func BP_Cursor($show) ; show / hide the mouse cursor (ShowCursor keeps a counter)
 	If $show = $BP_fCurOn Then Return
 	$BP_fCurOn = $show
