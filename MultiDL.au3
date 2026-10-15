@@ -1,8 +1,8 @@
-#NoTrayIcon
+﻿#NoTrayIcon
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.4.0.1
+#AutoIt3Wrapper_Res_Fileversion=8.4.0.2
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -52,7 +52,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.4.0.1"
+Global Const $APP_VERSION = "8.4.0.2"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (~MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 _SelfRelaunch()
@@ -506,9 +506,6 @@ Local $tBPUI = TimerInit()
 Local $tHov = TimerInit(), $bTitleHov = False
 Local $tAct = TimerInit(), $bAct = False ; make sure the window really has the focus after start (else the first click is lost)
 ; ---- Hauptschleife ----
-Local $bDragging = False
-Local $iDragX, $iDragY
-Local $iPosX, $iPosY
 Local $bLiveMode = False
 ; Pulse fuer Live-Balken
 Local $iPulse = 0, $iPulseDir = 1
@@ -615,8 +612,6 @@ While 1
 	; Start-Button-Farbe anhand des Eingabefelds aktualisieren
 	If $hDLProc <> 0 Or $BP_bPlayerMode Then $g_iStartState = -1 ; Button wird anderswo umgefaerbt -> danach einmal neu setzen
 	If Not $BP_bPlayerMode And $hDLProc = 0 Then _UpdateStartAppearance($hBtnDownload, _DetectURL(GUICtrlRead($hInput), $g_bDomainLinks) <> "")
-	; Maus losgelassen = Drag immer beenden, egal in welchem Fenster (sonst bleibt $bDragging haengen, wenn das Optionsfenster dazwischenkommt)
-	If $iMsg = $GUI_EVENT_PRIMARYUP Then $bDragging = False
 	; Optionsfenster hat eigene Nachrichten
 	If $aMsg[1] = $g_hOptGUI Then
 		If $iMsg = $GUI_EVENT_CLOSE Or $iMsg = $g_hOptClose Then
@@ -676,7 +671,7 @@ While 1
 			Local $iRelX = $aCursorPos[0] - $aWinPos[0]
 			Local $iRelY = $aCursorPos[1] - $aWinPos[1]
 			; X-Button
-			If $iRelX >= 529 And $iRelX <= 539 And $iRelY >= 0 And $iRelY <= 36 Then
+			If $iRelX >= 524 And $iRelX <= 559 And $iRelY >= 0 And $iRelY <= 36 Then
 				ExitLoop
 			EndIf
 			;update badge
@@ -690,7 +685,6 @@ While 1
 				GUICtrlSetState($g_hOptClip, $g_bClipWatch ? $GUI_CHECKED : $GUI_UNCHECKED)
 				GUICtrlSetState($g_hOptDomain, $g_bDomainLinks ? $GUI_CHECKED : $GUI_UNCHECKED)
 				GUICtrlSetState($g_hOptAuto, $g_bAutoStart ? $GUI_CHECKED : $GUI_UNCHECKED)
-				$bDragging = False
 				GUICtrlSetData($g_hOptConsole, $bShowCMD ? "Show download console: ON" : "Show download console: OFF")
 				GUICtrlSetState($g_hOptBP, $g_bUseBP ? $GUI_CHECKED : $GUI_UNCHECKED)
 				GUISetState(@SW_SHOW, $g_hOptGUI)
@@ -724,20 +718,14 @@ While 1
 					_ShowNormalControls($GUI_SHOW, $hLabelURL, $hInput, $hLine2, $hLabelFormat, $hToggleVideo, $hToggleMP3, $hLabelPlaylist, $hToggleSingle, $hTogglePlaylist, $hBtnDownload, $hBtnPaste, $hLine3, $hProgLabel, $hProgPct, $hProgBG, $hProgBar, $hLine4, $hBtnPlay, $hBtnFolder, $hPlayLabel, $hStatus, $hToggleLive)
 				EndIf
 			EndIf
-			; Drag nur auf freier Titelleiste: alle Titelleisten-Buttons (Options, Badge, BP, Minimize, Close) ausnehmen
-			If $iRelY < 36 And Not (($iRelX >= 8 And $iRelX <= 38) Or ($iRelX >= 246 And $iRelX <= 366) Or ($iRelX >= 398 And $iRelX <= 448) Or ($iRelX >= 456 And $iRelX <= 560)) Then
-				$bDragging = True
-				$iDragX = $aCursorPos[0]
-				$iDragY = $aCursorPos[1]
-				$iPosX = $aWinPos[0]
-				$iPosY = $aWinPos[1]
-			EndIf
-		Case $iMsg = $GUI_EVENT_PRIMARYUP
-			$bDragging = False
-		Case $iMsg = $GUI_EVENT_MOUSEMOVE
-			If $bDragging Then
-				Local $aCur = MouseGetPos()
-				WinMove($hGUI, "", $iPosX + ($aCur[0] - $iDragX), $iPosY + ($aCur[1] - $iDragY))
+			; Nativer Windows-Drag nur auf wirklich freier Titelleiste.
+			; Klickbereiche (Optionen/Titel, Update-Badge und rechte Buttons) bleiben ausgeschlossen.
+			Local $bUpdateBadgeVisible = (BitAND(GUICtrlGetState($hUpdateBadge), $GUI_SHOW) = $GUI_SHOW)
+			If $iRelY < 36 And Not (($iRelX >= 20 And $iRelX <= 160) Or ($bUpdateBadgeVisible And $iRelX >= 246 And $iRelX <= 366) Or ($iRelX >= 450 And $iRelX <= 560)) Then
+				; WM_NCLBUTTONDOWN erwartet die Bildschirmkoordinaten des Mauszeigers in lParam.
+				Local $iDragLParam = BitOR(BitAND($aCursorPos[0], 0xFFFF), BitShift(BitAND($aCursorPos[1], 0xFFFF), -16))
+				DllCall("user32.dll", "bool", "ReleaseCapture")
+				DllCall("user32.dll", "lresult", "SendMessageW", "hwnd", $hGUI, "uint", 0x00A1, "wparam", 2, "lparam", $iDragLParam) ; WM_NCLBUTTONDOWN / HTCAPTION
 			EndIf
 			; ---- embedded BrAiNPlay controls ----
 		Case $iMsg = $BP_bPlay
