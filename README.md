@@ -34,12 +34,12 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 - **Download folder as playlist**: `MultiDL-Downloads` is synced whenever the player opens and then every few seconds, **also while a download is running**. New files show up as soon as they are finished; half-written files and yt-dlp temp files are skipped. Files already in the playlist are not added twice, and a track you removed stays removed until you reopen the player.
 - **Manual playlists**: after loading an `.m3u` with **LOAD**, the playlist no longer follows the download folder. **CLEAR** switches the automatic sync back on.
 - **Click-to-seek waveform**: the waveform reflects the current track; click it to seek.
-- **Volume and balance**: draggable sliders, with settings remembered between sessions.
+- **Volume and balance**: draggable sliders, with settings remembered between sessions. They also work for videos played through ffplay: ffplay cannot change them while running, so it restarts at the same position shortly after you release the slider.
 - **Playlist tools**: add files, add folders, remove tracks, clear the playlist, and save or load `.m3u` playlists.
 - **Automatic playlist saving**: the last playlist is saved automatically.
 - **Shuffle and loop**: playback modes for your music collection.
-- **Video playback**: fullscreen on the active monitor or a window sized to the video.
-- **VIDEO ON / OFF**: toggle the video while a video is playing. Works for the built-in video window and for videos played through ffplay (OFF = sound only, ffplay restarts at the same position).
+- **Video playback**: fullscreen on the active monitor or a window sized to the video. `F` switches between the two in every play mode.
+- **VIDEO ON / OFF**: toggle the video while a video is playing. Works for the built-in video window and for videos played through ffplay (OFF = sound only, ffplay restarts at the same position). Closing the video window with its X button switches the video off and updates the button.
 - **Player selection**: choose the available playback method through the options, where supported.
 - **Keyboard shortcuts and media keys**: control playback without relying on the mouse.
 - **Minimize to tray**: playback continues in the background, and the tray tooltip displays the current track.
@@ -120,13 +120,15 @@ The following shortcuts are available in player mode.
 | `Ctrl+↑` / `Ctrl+↓` | Volume up / down |
 | `M` | Mute |
 | `Del` | Remove selected track from the playlist |
-| `V` | Show / hide the video (also for ffplay videos) |
-| `F` | Fullscreen |
-| `W` | Window mode, sized to the video |
-| `Esc` | Leave fullscreen / video off |
+| `V` | Video on / off (all play modes) |
+| `F` | Switch between fullscreen and window (all play modes); with the video off it turns the video on in fullscreen |
 | `+` / `-` / `0` | Zoom in / out / reset video zoom |
 | `A` | Switch audio track |
 | `D` | Move video to the next monitor |
+
+`V` and `F` also work while the ffplay window has the focus (Live and ffplay videos). The other ffplay keys (for example `Space`, `S`, `M`, arrow keys) are then handled by ffplay itself. `Esc` in the ffplay window quits ffplay and stops the track.
+
+`Esc` never closes MultiDL; only the **X** button does. With the built-in video player (WMP fallback) there is no window mode, so `F` leaves its fullscreen and turns the video off.
 
 The multimedia keys for play/pause, next, previous, and stop work globally while the player is in use, including when the window is minimized to the tray.
 
