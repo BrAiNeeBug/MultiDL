@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.4.0.2
+#AutoIt3Wrapper_Res_Fileversion=8.4.0.3
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -52,7 +52,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.4.0.2"
+Global Const $APP_VERSION = "8.4.0.3"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (~MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 _SelfRelaunch()
@@ -76,6 +76,7 @@ Global $g_sUnzipDebug = ""
 Global $bMP3Mode = False
 ; ---- Multi-Modus: False = einzelnes Video (Single), True = ganze Playlist (Multi) ----
 Global $BP_bPlaylistMode = False
+Global $g_sRawLink = "", $g_sCleanLink = "" ; full link vs. cleaned link shown in the input (Single mode)
 Global $g_bLiveSel = False ; Live selected: Single/Multi is switched off (a live stream is always a single stream)
 ; ---- CMD-Fenster sichtbar? ----
 Global $bShowCMD = False
@@ -509,10 +510,38 @@ Local $tAct = TimerInit(), $bAct = False ; make sure the window really has the f
 Local $bLiveMode = False
 ; Pulse fuer Live-Balken
 Local $iPulse = 0, $iPulseDir = 1
+Local $bLPrev = False, $bEdgePend = False, $tEdge = 0, $aEdge[2] = [0, 0] ; title-bar click safety net (see loop head)
 While 1
 	Local $aMsg = GUIGetMsg(1)
 	Local $iMsg = $aMsg[0]
 	If $BP_fQuit Then ExitLoop
+	; ---- title-bar click safety net: AutoIt loses the PRIMARYDOWN of a click while the window is inactive or the loop is busy
+	; -> watch the physical left button too; if no PRIMARYDOWN shows up shortly after a press, handle that click ourselves ----
+	Local $bSynth = False
+	Local $aLB = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", 0x01)
+	Local $bLNow = (IsArray($aLB) And BitAND($aLB[0], 0x8000) <> 0)
+	If $bLNow And Not $bLPrev Then
+		$aEdge = MouseGetPos()
+		$tEdge = TimerInit()
+		$bEdgePend = True
+	EndIf
+	$bLPrev = $bLNow
+	If $bEdgePend Then
+		If TimerDiff($tEdge) > 500 Then
+			$bEdgePend = False
+		ElseIf TimerDiff($tEdge) > 100 And $iMsg = 0 Then
+			$bEdgePend = False
+			Local $aWP0 = WinGetPos($hGUI)
+			If IsArray($aWP0) And Not $BP_fTray Then
+				Local $iEX = $aEdge[0] - $aWP0[0], $iEY = $aEdge[1] - $aWP0[1]
+				If $iEY >= 0 And $iEY < 36 And $iEX >= 0 And $iEX < 560 And _OverMainWin($aEdge) Then
+					$bSynth = True
+					$iMsg = $GUI_EVENT_PRIMARYDOWN
+					$aMsg[1] = $hGUI
+				EndIf
+			EndIf
+		EndIf
+	EndIf
 	If Not $bAct Then
 		If WinActive($hGUI) Or TimerDiff($tAct) > 2000 Then
 			$bAct = True
@@ -595,6 +624,7 @@ While 1
 			Local $sDetected = _DetectURL($sClipNow, $g_bDomainLinks)
 			If $sDetected <> "" Then
 				GUICtrlSetData($hInput, $sDetected)
+				_RefreshInputLink($hInput)
 				_UpdateStartAppearance($hBtnDownload, True)
 				_SetStatus($hStatus, "Link aus Zwischenablage erkannt.", 0x4FC3F7)
 				If $g_bAutoStart And $sDetected <> $g_sLastAutoURL And $hDLProc = 0 Then
@@ -655,7 +685,9 @@ While 1
 				ExitLoop
 			EndIf
 		Case $iMsg = $GUI_EVENT_PRIMARYDOWN
-			If $BP_bPlayerMode Then
+			$bEdgePend = False ; this click is handled (not lost)
+			$bLPrev = True
+			If $BP_bPlayerMode And Not $bSynth Then
 				Local $bpCInfo = GUIGetCursorInfo($hGUI)
 				If IsArray($bpCInfo) Then
 					If $bpCInfo[1] >= 76 And $bpCInfo[1] <= 152 And $bpCInfo[0] >= 20 And $bpCInfo[0] <= 540 Then
@@ -666,7 +698,7 @@ While 1
 					EndIf
 				EndIf
 			EndIf
-			Local $aCursorPos = MouseGetPos()
+			Local $aCursorPos = $bSynth ? $aEdge : MouseGetPos()
 			Local $aWinPos = WinGetPos($hGUI)
 			Local $iRelX = $aCursorPos[0] - $aWinPos[0]
 			Local $iRelY = $aCursorPos[1] - $aWinPos[1]
@@ -679,7 +711,7 @@ While 1
 				_SelfUpdate()
 			EndIf
 			; Minimize-Button
-			If $iRelX >= 499 And $iRelX <= 509 And $iRelY >= 0 And $iRelY <= 36 Then BP_ToTray()
+			If $iRelX >= 499 And $iRelX <= 523 And $iRelY >= 0 And $iRelY <= 36 Then BP_ToTray()
 			; Optionen-Button
 			If $iRelX >= 20 And $iRelX <= 160 And $iRelY >= 0 And $iRelY <= 36 Then
 				GUICtrlSetState($g_hOptClip, $g_bClipWatch ? $GUI_CHECKED : $GUI_UNCHECKED)
@@ -721,7 +753,7 @@ While 1
 			; Nativer Windows-Drag nur auf wirklich freier Titelleiste.
 			; Klickbereiche (Optionen/Titel, Update-Badge und rechte Buttons) bleiben ausgeschlossen.
 			Local $bUpdateBadgeVisible = (BitAND(GUICtrlGetState($hUpdateBadge), $GUI_SHOW) = $GUI_SHOW)
-			If $iRelY < 36 And Not (($iRelX >= 20 And $iRelX <= 160) Or ($bUpdateBadgeVisible And $iRelX >= 246 And $iRelX <= 366) Or ($iRelX >= 450 And $iRelX <= 560)) Then
+			If $iRelY < 36 And ($bLNow Or Not $bSynth) And Not (($iRelX >= 20 And $iRelX <= 160) Or ($bUpdateBadgeVisible And $iRelX >= 246 And $iRelX <= 366) Or ($iRelX >= 450 And $iRelX <= 560)) Then
 				; WM_NCLBUTTONDOWN erwartet die Bildschirmkoordinaten des Mauszeigers in lParam.
 				Local $iDragLParam = BitOR(BitAND($aCursorPos[0], 0xFFFF), BitShift(BitAND($aCursorPos[1], 0xFFFF), -16))
 				DllCall("user32.dll", "bool", "ReleaseCapture")
@@ -879,6 +911,7 @@ While 1
 				_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, 0)
 				_ModePaint($hToggleSingle, $hTogglePlaylist)
 				_ModeStatus($hStatus)
+				_RefreshInputLink($hInput)
 			EndIf
 		Case $iMsg = $hToggleMP3
 			If Not ($bLiveMode And $hDLProc <> 0) Then
@@ -888,6 +921,7 @@ While 1
 				_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, 1)
 				_ModePaint($hToggleSingle, $hTogglePlaylist)
 				_ModeStatus($hStatus)
+				_RefreshInputLink($hInput)
 			EndIf
 		Case $iMsg = $hToggleLive
 			If $hDLProc = 0 Then
@@ -896,6 +930,7 @@ While 1
 				_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, 2)
 				_ModePaint($hToggleSingle, $hTogglePlaylist)
 				_ModeStatus($hStatus)
+				_RefreshInputLink($hInput)
 			EndIf
 			; Toggle: Einzeln
 		Case $iMsg = $hToggleSingle
@@ -907,6 +942,7 @@ While 1
 					_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $bMP3Mode ? 1 : 0)
 					_ModePaint($hToggleSingle, $hTogglePlaylist)
 					_ModeStatus($hStatus)
+					_RefreshInputLink($hInput)
 				EndIf
 			ElseIf $BP_bPlaylistMode Then
 				$BP_bPlaylistMode = False
@@ -915,6 +951,7 @@ While 1
 				GUICtrlSetBkColor($hTogglePlaylist, 0x222222)
 				GUICtrlSetColor($hTogglePlaylist, $CLR_MUTED)
 				_ModeStatus($hStatus)
+				_RefreshInputLink($hInput)
 			EndIf
 			; Toggle: Playlist
 		Case $iMsg = $hTogglePlaylist
@@ -926,6 +963,7 @@ While 1
 					_FmtPaint($hToggleVideo, $hToggleMP3, $hToggleLive, $bMP3Mode ? 1 : 0)
 					_ModePaint($hToggleSingle, $hTogglePlaylist)
 					_ModeStatus($hStatus)
+					_RefreshInputLink($hInput)
 				EndIf
 			ElseIf Not $BP_bPlaylistMode Then
 				$BP_bPlaylistMode = True
@@ -934,6 +972,7 @@ While 1
 				GUICtrlSetBkColor($hToggleSingle, 0x222222)
 				GUICtrlSetColor($hToggleSingle, $CLR_MUTED)
 				_ModeStatus($hStatus)
+				_RefreshInputLink($hInput)
 			EndIf
 			; Download / Stop Toggle
 		Case $iMsg = $hBtnDownload
@@ -959,6 +998,7 @@ While 1
 				GUICtrlSetData($hBtnDownload, "Start")
 				_UpdateStartAppearance($hBtnDownload, _DetectURL(GUICtrlRead($hInput), $g_bDomainLinks) <> "")
 			Else
+				_RefreshInputLink($hInput)
 				Local $sRaw = GUICtrlRead($hInput)
 				$sRaw = StringStripWS($sRaw, 3)
 				If $sRaw = "" Then
@@ -1101,12 +1141,44 @@ EndFunc   ;==>_ShowLiveControls
 ; ============================================================
 Func _CleanURL($sURL)
 	$sURL = StringStripWS($sURL, 3)
-	If Not $BP_bPlaylistMode Or $g_bLiveSel Then
-		Local $iAmp = StringInStr($sURL, "&")
-		If $iAmp > 0 Then $sURL = StringLeft($sURL, $iAmp - 1)
-	EndIf
+	If $BP_bPlaylistMode And Not $g_bLiveSel Then Return $sURL ; Multi: keep the full link (list= and so on)
+	; YouTube: keep only the video id - works with v= anywhere in the query (watch?list=..&v=..), youtu.be, shorts/live/embed
+	Local $aYT = StringRegExp($sURL, "(?i)^https?://(?:www\.|m\.|music\.)?youtube\.com/watch\?(?:[^#]*&)?v=([\w-]{6,})", 1)
+	If IsArray($aYT) Then Return "https://www.youtube.com/watch?v=" & $aYT[0]
+	Local $aYB = StringRegExp($sURL, "(?i)^https?://youtu\.be/([\w-]{6,})", 1)
+	If IsArray($aYB) Then Return "https://www.youtube.com/watch?v=" & $aYB[0]
+	Local $aYS = StringRegExp($sURL, "(?i)^https?://(?:www\.|m\.)?youtube\.com/(?:shorts|live|embed)/([\w-]{6,})", 1)
+	If IsArray($aYS) Then Return "https://www.youtube.com/watch?v=" & $aYS[0]
+	; every other site: cut at the first & (as before)
+	Local $iAmp = StringInStr($sURL, "&")
+	If $iAmp > 0 Then $sURL = StringLeft($sURL, $iAmp - 1)
 	Return $sURL
 EndFunc   ;==>_CleanURL
+; Single/Live: show the cleaned link in the input field. Multi: give the full link back if the field still holds its cleaned version.
+Func _RefreshInputLink($hInput)
+	Local $sCur = StringStripWS(GUICtrlRead($hInput), 3)
+	If $sCur = "" Then Return
+	If $BP_bPlaylistMode And Not $g_bLiveSel Then
+		If $g_sRawLink <> "" And $sCur = $g_sCleanLink Then GUICtrlSetData($hInput, $g_sRawLink)
+	Else
+		Local $sDet = _DetectURL($sCur, $g_bDomainLinks)
+		If $sDet = "" Then Return
+		Local $sCl = _CleanURL($sDet)
+		If $sCl <> $sCur Then
+			$g_sRawLink = $sDet
+			$g_sCleanLink = $sCl
+			GUICtrlSetData($hInput, $sCl)
+		EndIf
+	EndIf
+EndFunc   ;==>_RefreshInputLink
+Func _OverMainWin($aPos) ; is the (visible) window under the screen point our main window?
+	Local $tPt = DllStructCreate($tagPOINT)
+	DllStructSetData($tPt, "X", $aPos[0])
+	DllStructSetData($tPt, "Y", $aPos[1])
+	Local $h = _WinAPI_WindowFromPoint($tPt)
+	If Not $h Then Return True ; cannot tell -> assume yes
+	Return _WinAPI_GetAncestor($h, 2) = $hGUI
+EndFunc   ;==>_OverMainWin
 ; Status bar: format + mode info (replaces the hint texts next to the toggles)
 Func _ModeStatus($hStatus)
 	If $g_bLiveSel Then
