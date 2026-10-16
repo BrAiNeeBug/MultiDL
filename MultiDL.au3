@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.4.0.4
+#AutoIt3Wrapper_Res_Fileversion=8.4.0.5
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -52,7 +52,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.4.0.4"
+Global Const $APP_VERSION = "8.4.0.5"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (~MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
@@ -154,61 +154,61 @@ Local $hLabelURL = GUICtrlCreateLabel("Data URL:", 24, 58, 250, 18)
 GUICtrlSetFont($hLabelURL, 9, 600, 0, "Segoe UI")
 GUICtrlSetColor($hLabelURL, $CLR_TEXT)
 GUICtrlSetBkColor($hLabelURL, $CLR_BG)
-Local $hInput = GUICtrlCreateEdit("", 24, 80, 512, 100, $ES_MULTILINE + $ES_AUTOVSCROLL + $WS_VSCROLL)
+Local $hInput = GUICtrlCreateEdit("", 24, 80, 512, 84, $ES_MULTILINE + $ES_AUTOVSCROLL + $WS_VSCROLL)
 GUICtrlSetFont($hInput, 9, 400, 0, "Consolas")
 GUICtrlSetColor($hInput, $CLR_TEXT)
 GUICtrlSetBkColor($hInput, $CLR_INPUT)
 ; ---- Trennlinie ----
-Local $hLine2 = GUICtrlCreateLabel("", 24, 198, 512, 1)
+Local $hLine2 = GUICtrlCreateLabel("", 24, 182, 512, 1)
 GUICtrlSetBkColor($hLine2, 0x2A2A2A)
 ; ---- Format Toggle ----
-Local $hLabelFormat = GUICtrlCreateLabel("Format:", 24, 212, 60, 20)
+Local $hLabelFormat = GUICtrlCreateLabel("Format:", 24, 196, 60, 20)
 GUICtrlSetFont($hLabelFormat, 9, 600, 0, "Segoe UI")
 GUICtrlSetColor($hLabelFormat, $CLR_MUTED)
 GUICtrlSetBkColor($hLabelFormat, $CLR_BG)
-Local $hToggleVideo = GUICtrlCreateLabel("Video(MP4)", 88, 207, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
+Local $hToggleVideo = GUICtrlCreateLabel("Video(MP4)", 88, 191, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
 GUICtrlSetFont($hToggleVideo, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleVideo, $CLR_TEXT)
 GUICtrlSetBkColor($hToggleVideo, $CLR_ACCENT)
-Local $hToggleMP3 = GUICtrlCreateLabel("Audio(MP3)", 176, 207, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
+Local $hToggleMP3 = GUICtrlCreateLabel("Audio(MP3)", 176, 191, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
 GUICtrlSetFont($hToggleMP3, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleMP3, $CLR_MUTED)
 GUICtrlSetBkColor($hToggleMP3, 0x222222)
 ; ---- Playlist Toggle ----
-Local $hLabelPlaylist = GUICtrlCreateLabel("Mode:", 24, 244, 60, 20)
+Local $hLabelPlaylist = GUICtrlCreateLabel("Mode:", 24, 228, 60, 20)
 GUICtrlSetFont($hLabelPlaylist, 9, 600, 0, "Segoe UI")
 GUICtrlSetColor($hLabelPlaylist, $CLR_MUTED)
 GUICtrlSetBkColor($hLabelPlaylist, $CLR_BG)
-Local $hToggleSingle = GUICtrlCreateLabel("Single", 88, 239, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
+Local $hToggleSingle = GUICtrlCreateLabel("Single", 88, 223, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
 GUICtrlSetFont($hToggleSingle, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleSingle, $CLR_TEXT)
 GUICtrlSetBkColor($hToggleSingle, $CLR_ACCENT)
-Local $hTogglePlaylist = GUICtrlCreateLabel("Multi", 176, 239, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
+Local $hTogglePlaylist = GUICtrlCreateLabel("Multi", 176, 223, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
 GUICtrlSetFont($hTogglePlaylist, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hTogglePlaylist, $CLR_MUTED)
 GUICtrlSetBkColor($hTogglePlaylist, 0x222222)
-Local $hToggleLive = GUICtrlCreateLabel("Live", 264, 239, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
+Local $hToggleLive = GUICtrlCreateLabel("Live", 264, 223, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
 GUICtrlSetFont($hToggleLive, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hToggleLive, $CLR_MUTED)
 GUICtrlSetBkColor($hToggleLive, 0x222222)
 ; ---- Buttons ----
-Local $hBtnDownload = GUICtrlCreateButton("Start", 24, 282, 512, 38)
+Local $hBtnDownload = GUICtrlCreateButton("Start", 24, 266, 512, 38)
 GUICtrlSetFont($hBtnDownload, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnDownload, $CLR_TEXT)
 GUICtrlSetBkColor($hBtnDownload, 0x00AA44)
-Local $hBtnPaste = GUICtrlCreateButton("PasteStart", 348, 282, 110, 38)
+Local $hBtnPaste = GUICtrlCreateButton("PasteStart", 348, 266, 110, 38)
 GUICtrlSetFont($hBtnPaste, 9, 700, 0, "Segoe UI")
 GUICtrlSetColor($hBtnPaste, $CLR_TEXT)
 GUICtrlSetBkColor($hBtnPaste, 0x1E3A1E)
 GUICtrlSetState($hBtnPaste, $GUI_HIDE) ; ersetzt durch Clipboard-Watcher
 ; ---- Fortschritts-Bereich ----
-Local $hLine3 = GUICtrlCreateLabel("", 24, 334, 512, 1)
+Local $hLine3 = GUICtrlCreateLabel("", 24, 318, 512, 1)
 GUICtrlSetBkColor($hLine3, 0x2A2A2A)
-Local $hProgLabel = GUICtrlCreateLabel("Ready.", 24, 342, 460, 16)
+Local $hProgLabel = GUICtrlCreateLabel("Ready.", 24, 326, 460, 32, $SS_NOPREFIX) ; 2 lines: error messages fit
 GUICtrlSetFont($hProgLabel, 8, 400, 0, "Segoe UI")
 GUICtrlSetColor($hProgLabel, $CLR_MUTED)
 GUICtrlSetBkColor($hProgLabel, $CLR_BG)
-Local $hProgPct = GUICtrlCreateLabel("", 490, 342, 46, 16)
+Local $hProgPct = GUICtrlCreateLabel("", 490, 326, 46, 16)
 GUICtrlSetFont($hProgPct, 8, 700, 0, "Segoe UI")
 GUICtrlSetColor($hProgPct, $CLR_ACCENT)
 GUICtrlSetBkColor($hProgPct, $CLR_BG)
@@ -1209,7 +1209,7 @@ EndFunc   ;==>_OverMainWin
 ; Status bar: format + mode info (replaces the hint texts next to the toggles)
 Func _ModeStatus($hStatus)
 	If $g_bLiveSel Then
-		_SetStatus($hStatus, "Live: watch a livestream", $CLR_ACCENT)
+		_SetStatus($hStatus, "Live: watch a livestream", $CLR_MUTED)
 	Else
 		_SetStatus($hStatus, ($bMP3Mode ? "Audio (MP3): best audio quality" : "Video (MP4): best video quality") & "   |   " & ($BP_bPlaylistMode ? "Multi: download all files of the link" : "Single: download one file"), $CLR_MUTED)
 	EndIf
@@ -1253,7 +1253,7 @@ EndFunc   ;==>_Is416Line
 Func _DLErrorLabel($sRaw)
 	If _IsBotBlockLine($sRaw) Then Return "YouTube blocked you (bot-check)! Restart your router for a new IP."
 	If _Is416Line($sRaw) Then Return "ERROR 416 - too much still open! Reboot PC/router, then retry."
-	Return StringLeft($sRaw, 75)
+	Return StringLeft(StringRegExpReplace($sRaw, "\s+", " "), 150)
 EndFunc   ;==>_DLErrorLabel
 Func _DLErrorStatus($sRaw)
 	If _IsBotBlockLine($sRaw) Then Return "BLOCKED by YouTube (bot-check)! Restart your router (new IP) and try again in a bit."
@@ -2770,6 +2770,7 @@ Func BP_Tick()
 		If $BP_fFull And Not $BP_fWmp Then BP_Osd($BP_sNow, 4000) ; track title over the fullscreen video (WMP: when it enters fullscreen)
 		If $BP_fWmp Then BP_Log("wmp audio languages: " & Number($BP_oWMP.controls.audioLanguageCount))
 	EndIf
+	If $BP_fWmp And Not $BP_fFull And $BP_fVidOn And $BP_iVSz >= 1 And TimerDiff($BP_tStart) < 8000 Then BP_WmpFit() ; WMP reports the picture size late (first it may still show the previous video's) -> follow it for the first seconds
 	If $BP_fWmp And $BP_iLen <= 0 Then ; length unknown from Explorer -> ask WMP
 		Local $oM = $BP_oWMP.currentMedia
 		If IsObj($oM) Then $BP_iLen = Number($oM.duration)
@@ -3216,12 +3217,17 @@ Func BP_VidApply() ; TV button + video window follow: current track is a video? 
 		BP_Dock()
 		GUISetState(@SW_SHOWNOACTIVATE, $BP_hVid)
 		WinSetOnTop($BP_hVid, "", ($BP_fFull And Not $BP_fWmp) ? 1 : 0)
+		If $BP_fWmp And Not $BP_fFull Then ; WMP window mode: WMP leaves its fullscreen (in BP_VideoSize) - not the user leaving it
+			$BP_fWFS = False
+			BP_WmpKeys(False)
+		EndIf
 		$BP_fVidShown = True
 		BP_VideoSize()
 		If $BP_fFull And Not $BP_fWmp Then WinActivate($BP_hMain) ; the keyboard stays with the player (shortcuts keep working in fullscreen)
 	Else
 		If IsObj($BP_oWMP) Then $BP_oWMP.fullScreen = False ; leave WMP's own fullscreen
 		BP_WmpKeys(False)
+		$BP_fWFS = False ; WMP is out of fullscreen -> the next fullscreen entry must register the hotkeys again (else the keys stay dead and only Esc works)
 		GUISetState(@SW_HIDE, $BP_hOsd)
 		$BP_tOsd = 0
 		GUISetState(@SW_HIDE, $BP_hVid)
@@ -3234,7 +3240,7 @@ EndFunc   ;==>BP_VidApply
 Func BP_Dock() ; MCI fullscreen: the video monitor | MCI window: placed by _VideoSize | WMP: invisible host window on the video monitor (its fullscreen follows it)
 	Local $r = BP_VidMonitor()
 	If $BP_fWmp Then
-		WinMove($BP_hVid, "", $r[0] + 20, $r[1] + 20, $BP_iWw, $BP_iWh)
+		If $BP_fFull Then WinMove($BP_hVid, "", $r[0] + 20, $r[1] + 20, $BP_iWw, $BP_iWh)
 		Return
 	EndIf
 	Local $p = WinGetPos($BP_hMain)
@@ -3244,7 +3250,7 @@ Func BP_Dock() ; MCI fullscreen: the video monitor | MCI window: placed by _Vide
 	EndIf
 EndFunc   ;==>BP_Dock
 Func BP_VidStyle() ; 0 = fullscreen (borderless) | 1 = window (title bar) | 2 = WMP host (invisible, click-through, sits on the video monitor)
-	Local $m = $BP_fWmp ? 2 : ($BP_fFull ? 0 : 1)
+	Local $m = $BP_fFull ? ($BP_fWmp ? 2 : 0) : 1
 	If $m = $BP_iSty Then Return
 	$BP_iSty = $m
 	If $m = 1 Then
@@ -3285,12 +3291,10 @@ Func BP_VidKey($k) ; f = fullscreen <-> window (video off -> on, fullscreen) - s
 		BP_VidApply()
 		Return
 	EndIf
-	If $BP_fVidShown And Not $BP_fFull And Not $BP_fWmp Then BP_MonRemember() ; window was maybe dragged to another monitor -> fullscreen goes there
+	If $BP_fVidShown And Not $BP_fFull Then BP_MonRemember() ; window was maybe dragged to another monitor -> fullscreen goes there
 	If Not $BP_fVidOn Then
 		$BP_fVidOn = True
 		$BP_fFull = True
-	ElseIf $BP_fWmp Then ; WMP has no window mode: F leaves its fullscreen = video off
-		$BP_fVidOn = False
 	Else
 		$BP_fFull = Not $BP_fFull
 	EndIf
@@ -3306,6 +3310,7 @@ Func BP_VidPoll() ; called every ~30 ms while the video window is visible
 	EndIf
 	BP_KeepAwake(Not $BP_fPause) ; no screensaver / display sleep while a video is shown (not while paused)
 	If $BP_fWmp Then
+		If Not $BP_fFull And Not $BP_fTray And WinActive($BP_hVid) Then WinActivate($BP_hMain) ; window mode: a click in the picture gives the focus to WMP -> hand the keyboard back to the player (its keys only work there)
 		If $BP_iVSz >= 1 Then
 			$now = ($BP_oWMP.fullScreen <> 0)
 			If $now Then
@@ -3313,13 +3318,19 @@ Func BP_VidPoll() ; called every ~30 ms while the video window is visible
 					$BP_fWFS = True
 					BP_WmpKeys(True)
 					BP_Osd($BP_sNow, 4000)
+					If Not $BP_fFull Then ; the user entered WMP's fullscreen itself (double click in the picture)
+						$BP_fFull = True
+						$BP_sWin = ""
+					EndIf
 				EndIf
 			ElseIf $BP_fWFS And TimerDiff($BP_tStart) > 1500 Then ; WMP left its fullscreen
 				$BP_fWFS = False
 				$mp = $BP_oWMP.playState
-				If $mp = 3 Or $mp = 2 Then ; still playing / paused = the user left it (Esc / double-click) -> video off
-					BP_Log("WMP fullscreen left by the user -> video off")
-					$BP_fVidOn = False
+				If $mp = 3 Or $mp = 2 Then ; still playing / paused = the user left it (Esc / double-click) -> window mode
+					BP_Log("WMP fullscreen left by the user -> window")
+					$BP_fFull = False
+					$BP_sWin = ""
+					$BP_tChg = TimerInit()
 					BP_VidApply()
 				Else ; the video ended and WMP leaves fullscreen by itself -> keep "video wanted", the next video opens the window again
 					BP_Log("WMP fullscreen left (video ended, state " & $mp & ")")
@@ -3549,12 +3560,55 @@ Func BP_MonitorRect($hWnd) ; [x, y, w, h] of the monitor the window is on
 	$a[3] = DllStructGetData($t, 5) - $a[1]
 	Return $a
 EndFunc   ;==>BP_MonitorRect
+Func BP_WmpFit() ; WMP window mode: client area = video size (scaled down if it does not fit the monitor), the WMP control fills it
+	Local $z = WinGetClientSize($BP_hVid)
+	If Not IsArray($z) Then Return
+	If $z[0] < 2 Or $z[1] < 2 Then Return
+	Local $oM = $BP_oWMP.currentMedia, $sw = 0, $sh = 0
+	If IsObj($oM) Then
+		$sw = Number($oM.imageSourceWidth)
+		$sh = Number($oM.imageSourceHeight)
+	EndIf
+	Local $mr = BP_VidMonitor(), $cw = ($sw > 0) ? $sw : 640, $ch = ($sh > 0) ? $sh : 360
+	Local $k = _Min(1, _Min($mr[2] * 0.9 / $cw, $mr[3] * 0.9 / $ch))
+	$cw = Int($cw * $k)
+	$ch = Int($ch * $k)
+	Local $bNewSz = ($BP_sWin <> $cw & "x" & $ch)
+	If $bNewSz Then ; new video / mode: resize + center once (afterwards the user may move the window)
+		$BP_sWin = $cw & "x" & $ch
+		Local $ps = WinGetPos($BP_hVid)
+		If IsArray($ps) Then
+			Local $ex = $ps[2] - $z[0], $ey = $ps[3] - $z[1] ; title bar + borders
+			WinMove($BP_hVid, "", $mr[0] + Int(($mr[2] - $cw - $ex) / 2), $mr[1] + Int(($mr[3] - $ch - $ey) / 2), $cw + $ex, $ch + $ey)
+		EndIf
+	EndIf
+	$z = WinGetClientSize($BP_hVid) ; the control fills what the window really has now (not what we calculated)
+	If IsArray($z) Then
+		If $z[0] > 1 And $z[1] > 1 Then
+			$cw = $z[0]
+			$ch = $z[1]
+		EndIf
+	EndIf
+	GUICtrlSetPos($BP_idWMP, 0, 0, $cw, $ch)
+	If $bNewSz Then ; WMP keeps the picture layout of the first video of the session -> force it to lay the picture out again for this window
+		GUICtrlSetPos($BP_idWMP, 0, 0, $cw - 1, $ch - 1)
+		GUICtrlSetPos($BP_idWMP, 0, 0, $cw, $ch)
+		$BP_oWMP.stretchToFit = False
+		$BP_oWMP.stretchToFit = True
+		$BP_oWMP.uiMode = "none"
+	EndIf
+EndFunc   ;==>BP_WmpFit
 Func BP_VideoSize() ; MCI: fullscreen = picture letterboxed into the monitor | window = client area gets the video's size. WMP: fullscreen is its own
 	If Not ($BP_fPlay And $BP_fVid) Then Return
 	If $BP_fWmp Then
 		$BP_oWMP.stretchToFit = True
 		If $BP_fVidOn And $BP_iVSz >= 1 Then
-			If Not $BP_oWMP.fullScreen Then $BP_oWMP.fullScreen = True
+			If $BP_fFull Then
+				If Not $BP_oWMP.fullScreen Then $BP_oWMP.fullScreen = True
+			Else ; window mode: out of WMP's fullscreen, window = video size
+				If $BP_oWMP.fullScreen Then $BP_oWMP.fullScreen = False
+				BP_WmpFit()
+			EndIf
 		EndIf
 		Return
 	EndIf
