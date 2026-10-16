@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.4.0.3
+#AutoIt3Wrapper_Res_Fileversion=8.4.0.4
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
@@ -52,10 +52,9 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.4.0.3"
+Global Const $APP_VERSION = "8.4.0.4"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (~MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
-_SelfRelaunch()
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
 Global $g_sPlayReq = "" ; file the main loop should open in BrAiNPlay (Play last File / live view)
 Global $g_bPLManual = False ; True after a playlist was loaded by hand -> the player no longer follows the download folder
@@ -69,7 +68,13 @@ Global $g_bAutoStart = (IniRead($CFG_FILE, "features", "auto_start", "0") = "1")
 Global $g_bDomainLinks = (IniRead($CFG_FILE, "features", "domain_links", "1") = "1")
 Global $g_bUseBP = (IniRead($CFG_FILE, "features", "use_brainplay", "1") = "1") ; False = Play last File opens the system player
 Global $g_sLastClipboard = "", $g_sLastAutoURL = "", $g_tClipPoll = TimerInit()
-Global $g_hOptGUI = 0, $g_hOptClip = 0, $g_hOptDomain = 0, $g_hOptAuto = 0, $g_hOptClose = 0, $g_hOptConsole = 0, $g_hOptUpdate = 0, $g_hOptBP = 0
+Global $g_hOptGUI = 0, $g_hOptClip = 0, $g_hOptDomain = 0, $g_hOptAuto = 0, $g_hOptClose = 0, $g_hOptConsole = 0, $g_hOptUpdate = 0, $g_hOptBP = 0, $g_hOptMulti = 0
+Global $g_bMultiInst = (IniRead($CFG_FILE, "features", "multi_instance", "0") = "1") ; False (default) = only one MultiDL at a time
+Global $g_bShowReq = False, $g_tFFKey = TimerInit() ; a second start asked this instance to show its window / ffplay key poll timer
+; ---- single instance: a second start shows the running window (also from the tray) and quits - before the copy/relaunch dance ----
+_SingleInstance(False)
+_SelfRelaunch()
+_SingleInstance(True) ; the instance that stays takes the mutex
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
 ; ---- Modus: False = Video, True = MP3 ----
@@ -475,12 +480,13 @@ EndFunc   ;==>BP_SetControls
 $BP_hVid = GUICreate("MultiDL BrAiNPlay Video", $BP_iWw, $BP_iWh, -1, -1, BitOR($WS_POPUP, $WS_CLIPCHILDREN), $WS_EX_NOACTIVATE, $hGUI)
 GUISetBkColor(0x000000, $BP_hVid)
 GUIRegisterMsg($WM_CLOSE, "BP_WMClose")
+If _ShowMsgId() Then GUIRegisterMsg(_ShowMsgId(), "_OnShowMe")
 GUISwitch($hGUI)
 BP_SetControls($GUI_HIDE)
 BP_Apply()
 BP_PLText()
 ; ---- Optionen-Fenster (wird bei Bedarf eingeblendet) ----
-$g_hOptGUI = GUICreate("MultiDL Options", 280, 360, -1, -1, $WS_CAPTION + $WS_SYSMENU, -1, $hGUI)
+$g_hOptGUI = GUICreate("MultiDL Options", 280, 420, -1, -1, $WS_CAPTION + $WS_SYSMENU, -1, $hGUI)
 Local $hOptTitle = GUICtrlCreateLabel("Link-Detection", 16, 14, 248, 22)
 $g_hOptClip = GUICtrlCreateCheckbox("Check for Links in Clipboard.", 18, 44, 250, 22)
 $g_hOptDomain = GUICtrlCreateCheckbox("Resolve Links without http(s)", 18, 72, 250, 22)
@@ -494,7 +500,10 @@ If $g_bUseBP Then GUICtrlSetState($g_hOptBP, $GUI_CHECKED)
 Local $hOptTitle2 = GUICtrlCreateLabel("Tools", 16, 204, 248, 22)
 $g_hOptConsole = GUICtrlCreateButton("Show download console: OFF", 18, 230, 244, 30)
 $g_hOptUpdate = GUICtrlCreateButton("Update all tools", 18, 266, 244, 30)
-$g_hOptClose = GUICtrlCreateButton("CLOSE", 92, 314, 95, 28)
+Local $hOptTitle3 = GUICtrlCreateLabel("Program", 16, 306, 248, 22)
+$g_hOptMulti = GUICtrlCreateCheckbox("Allow multiple instances (Multi-Run)", 18, 332, 250, 22)
+If $g_bMultiInst Then GUICtrlSetState($g_hOptMulti, $GUI_CHECKED)
+$g_hOptClose = GUICtrlCreateButton("CLOSE", 92, 374, 95, 28)
 GUICtrlSetState($g_hOptGUI, $GUI_HIDE)
 If Not $g_bUseBP Then GUICtrlSetState($hBtnPlayer, $GUI_HIDE) ; internal player disabled -> no BP button
 ; ---- Fenster anzeigen ----
@@ -515,6 +524,16 @@ While 1
 	Local $aMsg = GUIGetMsg(1)
 	Local $iMsg = $aMsg[0]
 	If $BP_fQuit Then ExitLoop
+	If $g_bShowReq Then ; a second start of MultiDL asked us to show the window
+		$g_bShowReq = False
+		If $BP_fTray Then
+			BP_FromTray()
+		Else
+			GUISetState(@SW_SHOW, $hGUI)
+			GUISetState(@SW_RESTORE, $hGUI)
+			WinActivate($hGUI)
+		EndIf
+	EndIf
 	; ---- title-bar click safety net: AutoIt loses the PRIMARYDOWN of a click while the window is inactive or the loop is busy
 	; -> watch the physical left button too; if no PRIMARYDOWN shows up shortly after a press, handle that click ourselves ----
 	Local $bSynth = False
@@ -610,6 +629,10 @@ While 1
 			$BP_tPoll = TimerInit()
 			BP_VidPoll()
 		EndIf
+		If $BP_fFF And $BP_pFF And TimerDiff($g_tFFKey) > 30 Then ; keys typed into the ffplay window (F / V)
+			$g_tFFKey = TimerInit()
+			BP_FFKeys()
+		EndIf
 		If TimerDiff($tBPUI) > 200 Then
 			BP_Tick()
 			$tBPUI = TimerInit()
@@ -650,6 +673,9 @@ While 1
 			$g_bUseBP = (BitAND(GUICtrlRead($g_hOptBP), $GUI_CHECKED) = $GUI_CHECKED)
 			IniWrite($CFG_FILE, "features", "use_brainplay", $g_bUseBP ? "1" : "0")
 			GUICtrlSetState($hBtnPlayer, ($g_bUseBP Or $BP_bPlayerMode) ? $GUI_SHOW : $GUI_HIDE)
+		ElseIf $iMsg = $g_hOptMulti Then
+			$g_bMultiInst = (BitAND(GUICtrlRead($g_hOptMulti), $GUI_CHECKED) = $GUI_CHECKED)
+			IniWrite($CFG_FILE, "features", "multi_instance", $g_bMultiInst ? "1" : "0")
 		ElseIf $iMsg = $g_hOptConsole Then
 			$bShowCMD = Not $bShowCMD
 			GUICtrlSetData($g_hOptConsole, $bShowCMD ? "Show download console: ON" : "Show download console: OFF")
@@ -719,6 +745,7 @@ While 1
 				GUICtrlSetState($g_hOptAuto, $g_bAutoStart ? $GUI_CHECKED : $GUI_UNCHECKED)
 				GUICtrlSetData($g_hOptConsole, $bShowCMD ? "Show download console: ON" : "Show download console: OFF")
 				GUICtrlSetState($g_hOptBP, $g_bUseBP ? $GUI_CHECKED : $GUI_UNCHECKED)
+				GUICtrlSetState($g_hOptMulti, $g_bMultiInst ? $GUI_CHECKED : $GUI_UNCHECKED)
 				GUISetState(@SW_SHOW, $g_hOptGUI)
 			EndIf
 			; PLAYER-Button
@@ -2215,6 +2242,51 @@ EndFunc   ;==>_CheckForUpdate
 ;  Self update. MultiDL.exe starts a copy of itself (~MultiDL.exe) and exits, so the main file is
 ;  never locked while MultiDL runs. The update only has to replace MultiDL.exe and start it again.
 ; ============================================================
+Func _ShowMsgId() ; registered window message: "show your window"
+	Local $a = DllCall("user32.dll", "uint", "RegisterWindowMessageW", "wstr", "MultiDL_BrAiNee_ShowWindow")
+	If @error Or Not IsArray($a) Then Return 0
+	Return $a[0]
+EndFunc   ;==>_ShowMsgId
+Func _OtherInstance($bCreate) ; True = another MultiDL holds the mutex. $bCreate: take the mutex if it is free (kept until the process ends)
+	Local $sName = "MultiDL_BrAiNee_SingleInstance"
+	If $bCreate Then
+		Local $aM = DllCall("kernel32.dll", "handle", "CreateMutexW", "ptr", 0, "bool", True, "wstr", $sName)
+		If @error Or Not IsArray($aM) Then Return False
+		Local $aE = DllCall("kernel32.dll", "dword", "GetLastError")
+		If IsArray($aE) And $aE[0] = 183 Then ; ERROR_ALREADY_EXISTS
+			DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $aM[0])
+			Return True
+		EndIf
+		Return False
+	EndIf
+	Local $aO = DllCall("kernel32.dll", "handle", "OpenMutexW", "dword", 0x00100000, "bool", False, "wstr", $sName)
+	If @error Or Not IsArray($aO) Or Not $aO[0] Then Return False
+	DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $aO[0])
+	Return True
+EndFunc   ;==>_OtherInstance
+Func _SingleInstance($bCreate)
+	If $g_bMultiInst Then Return
+	Local $t = TimerInit(), $iWait = StringInStr($CmdLineRaw, "/updated") ? 10000 : 0 ; after an update the old instance is just closing
+	While _OtherInstance($bCreate)
+		If TimerDiff($t) >= $iWait Then
+			_ShowRunningInstance()
+			Exit
+		EndIf
+		Sleep(200)
+	WEnd
+EndFunc   ;==>_SingleInstance
+Func _ShowRunningInstance() ; ask the running MultiDL to show itself (it may sit in the tray); if it can't be found we simply don't start another one
+	Local $h = WinGetHandle($APP_TITLE)
+	If @error Or Not $h Then Return
+	Local $iPid = WinGetProcess($h)
+	If $iPid > 0 Then DllCall("user32.dll", "bool", "AllowSetForegroundWindow", "dword", $iPid)
+	Local $iMsg = _ShowMsgId()
+	If $iMsg Then DllCall("user32.dll", "bool", "PostMessageW", "hwnd", $h, "uint", $iMsg, "wparam", 0, "lparam", 0)
+EndFunc   ;==>_ShowRunningInstance
+Func _OnShowMe($hWnd, $iMsg, $wParam, $lParam)
+	$g_bShowReq = True
+	Return $GUI_RUNDEFMSG
+EndFunc   ;==>_OnShowMe
 Func _SelfRelaunch()
 	If Not @Compiled Then Return
 	If StringLeft(@ScriptName, 1) = "~" Then
@@ -2254,7 +2326,7 @@ Func _SelfUpdate() ; click on the update badge
 		Return
 	EndIf
 	DllCall("user32.dll", "bool", "AllowSetForegroundWindow", "dword", -1)
-	Run('"' & $sMain & '"', $APP_DIR)
+	Run('"' & $sMain & '" /updated', $APP_DIR)
 	Exit
 EndFunc   ;==>_SelfUpdate
 Func _CompareVersion($sA, $sB)
@@ -2417,15 +2489,24 @@ Func BP_FFStart($f, $iSs = 0) ; video through ffplay (own window): used under Wi
 	BP_Log("video via ffplay: " & $f)
 	Return True
 EndFunc   ;==>BP_FFStart
-Func BP_FFTick() ; ffplay housekeeping (called from BP_Tick)
-	Local $rV = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", 0x56), $rF = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", 0x46) ; bit 0 = "pressed since the last call"
-	If $BP_pFF And WinActive("[TITLE:MultiDL BrAiNPlay; CLASS:SDL_app]") Then ; keys typed into the ffplay window itself
-		If Not @error And IsArray($rV) And BitAND($rV[0], 1) Then
-			BP_ToggleVid() ; V = picture off (ffplay's own V only cycles streams)
-			Return
-		EndIf
-		If IsArray($rF) And BitAND($rF[0], 1) Then $BP_fFull = Not $BP_fFull ; F toggles ffplay's own fullscreen -> just keep our state in sync
+Func BP_FFKeys() ; F / V typed while the ffplay window has the focus (polled every ~30 ms): same keys as in every other play mode, done by us (restart at the same second)
+	Static $bPF = False, $bPV = False
+	Local $aF = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", 0x46), $aV = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", 0x56)
+	Local $bF = (IsArray($aF) And BitAND($aF[0], 0x8000) <> 0), $bV = (IsArray($aV) And BitAND($aV[0], 0x8000) <> 0)
+	Local $bEdgeF = ($bF And Not $bPF), $bEdgeV = ($bV And Not $bPV)
+	$bPF = $bF
+	$bPV = $bV
+	If Not ($bEdgeF Or $bEdgeV) Then Return
+	Local $hA = WinGetHandle("[ACTIVE]")
+	If Not $hA Then Return
+	If Not (WinGetProcess($hA) = $BP_pFF Or WinActive("[TITLE:MultiDL BrAiNPlay; CLASS:SDL_app]")) Then Return
+	If $bEdgeF Then
+		BP_VidKey("f") ; fullscreen <-> window
+	ElseIf $bEdgeV Then
+		BP_ToggleVid() ; picture on / off
 	EndIf
+EndFunc   ;==>BP_FFKeys
+Func BP_FFTick() ; ffplay housekeeping (called from BP_Tick)
 	If $BP_pFF And Not $BP_fPause And Not $BP_iDrag And $BP_tFFApply And TimerDiff($BP_tFFApply) > 400 Then
 		$BP_tFFApply = 0
 		If $BP_iVol <> $BP_iFFVol Or $BP_iBal <> $BP_iFFBal Then BP_FFRestart() ; volume / balance changed
@@ -2695,11 +2776,12 @@ Func BP_Tick()
 	EndIf
 	Local $s = BP_Pos()
 	If $BP_iLen > 0 Then $s = _Min($s, $BP_iLen)
-	GUICtrlSetData($BP_lblTime, BP_T($s) & " / " & ($BP_iLen ? BP_T($BP_iLen) : "--:--"))
+	If $BP_bPlayerMode Then GUICtrlSetData($BP_lblTime, BP_T($s) & " / " & ($BP_iLen ? BP_T($BP_iLen) : "--:--")) ; (hidden label sits over the last line of the link field: updating it there made it flicker)
 	Local $k = $BP_iLen ? _Min(Int($s / $BP_iLen * $BP_N), $BP_N) : 0
 	If $k <> $BP_iLit Then BP_Seg($k)
 EndFunc   ;==>BP_Tick
 Func BP_Seg($k)
+	If Not $BP_bPlayerMode Then Return ; hidden controls stay untouched (a color change can make them show through the download view)
 	For $i = 0 To $BP_N - 1
 		GUICtrlSetBkColor($BP_aSeg[$i], $i < $k ? $BP_ACC : $BP_DIM)
 	Next
@@ -2759,6 +2841,7 @@ Func BP_Apply()
 	GUICtrlSetData($BP_lblVol, "VOL " & $BP_iVol)
 	GUICtrlSetData($BP_lblBal, $ok ? "BAL " & ($BP_iBal < 0 ? "L" & - $BP_iBal : ($BP_iBal > 0 ? "R" & $BP_iBal : "C")) : "BAL n/a")
 	Local $kv = Round($BP_iVol / 100 * $BP_NV), $kb = Round(($BP_iBal + 100) / 200 * ($BP_NB - 1))
+	If Not $BP_bPlayerMode Then Return ; the bars are redrawn when the player view opens (BP_Apply is called then)
 	For $i = 0 To $BP_NV - 1
 		GUICtrlSetBkColor($BP_aV[$i], $i < $kv ? $BP_ACC : $BP_DIM)
 	Next
@@ -2782,6 +2865,11 @@ Func BP_Wave($f)
 		$m = $ok ? 8 + Int($v[$i] * $BP_WA) : BP_Def($i)
 		GUICtrlSetPos($BP_aSeg[$i], BP_SegX($i), $BP_WY - Int($m / 2), 7, $m)
 	Next
+	If Not $BP_bPlayerMode Then ; moved while hidden -> make sure they stay hidden
+		For $i = 0 To $BP_N - 1
+			GUICtrlSetState($BP_aSeg[$i], $GUI_HIDE)
+		Next
+	EndIf
 EndFunc   ;==>BP_Wave
 Func BP_WavEnv($f, ByRef $v) ; 16-bit PCM only, fills $v with 0..1
 	Local $h = FileOpen($f, 16)
@@ -2831,7 +2919,7 @@ EndFunc   ;==>BP_WavEnv
 Func BP_Mp3Env($f, ByRef $v) ; MPEG-1 Layer III, fills $v with 0..1
 	Local $h = FileOpen($f, 16)
 	If $h = -1 Then Return False
-	Local $sz = FileGetSize($f), $lo = 0, $hi, $t = DllStructCreate("byte[4096]"), $b, $g, $sum, $cnt, $tot = 0, $mn = 9999, $mx = 0, $av = 0
+	Local $sz = FileGetSize($f), $lo = 0, $hi, $t = DllStructCreate("byte[4096]"), $b, $g, $sum, $cnt, $tot = 0, $mn = 9999, $mx = 0, $aV = 0
 	DllStructSetData($t, 1, FileRead($h, 10))
 	If DllStructGetData(DllStructCreate("char[3]", DllStructGetPtr($t)), 1) = "ID3" Then ; skip ID3v2 tag
 		$lo = 10 + BitShift(DllStructGetData($t, 1, 7), -21) + BitShift(DllStructGetData($t, 1, 8), -14) + BitShift(DllStructGetData($t, 1, 9), -7) + DllStructGetData($t, 1, 10)
@@ -2855,16 +2943,16 @@ Func BP_Mp3Env($f, ByRef $v) ; MPEG-1 Layer III, fills $v with 0..1
 		$v[$i] = $cnt ? $sum / $cnt : -1
 		If $cnt Then
 			$tot += 1
-			$av += $v[$i]
+			$aV += $v[$i]
 			$mn = _Min($mn, $v[$i])
 			$mx = _Max($mx, $v[$i])
 		EndIf
 	Next
 	FileClose($h)
 	If $tot < $BP_N / 2 Then Return False
-	$av /= $tot
+	$aV /= $tot
 	For $i = 0 To $BP_N - 1
-		If $v[$i] < 0 Then $v[$i] = $av
+		If $v[$i] < 0 Then $v[$i] = $aV
 		$v[$i] = ($v[$i] - $mn) / _Max($mx - $mn, 8)
 	Next
 	Return True
