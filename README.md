@@ -14,24 +14,48 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 - **Video download**: best available video and audio quality, merged into MP4 using ffmpeg.
 - **Audio download**: best available audio extracted as MP3 via ffmpeg.
 - **Live View**: watch a video while it downloads. With the internal player enabled it opens in BrAiNPlay, otherwise in your system player.
-- **Playlist mode**: download entire playlists or individual files.
-- **Auto URL cleanup**: removes playlist parameters from single-video links (silently, no extra info line).
+- **Single / Multi mode**: download one file, or all files of a link (playlists).
+- **Download list**: links are collected in a small list below the input field and downloaded one after another. Every link keeps the format (Video/Audio, Single/Multi) that was selected when it was added.
+- **Auto URL cleanup**: in Single mode, playlist parameters are removed from single-video links (silently, no extra info line). Multi mode keeps the full link.
 - **Status bar info**: shows the selected format and mode (e.g. `Video (MP4): best video quality | Single: download one file`).
-- **Clipboard monitoring**: detect supported URLs copied to the clipboard.
-- **Automatic link processing**: configure how detected links are handled.
-- **Domain link detection**: recognize supported links based on their domain.
-- **Start / Stop toggle**: cancel a running download.
+- **Clipboard monitoring**: every supported URL copied to the clipboard is added to the download list.
+- **Automatic mode**: links that are added start downloading by themselves, also while another download is running (they wait in the list).
+- **Domain link detection**: recognize links without `http(s)`, e.g. `example.com/watch?v=...`.
+- **Start / Stop button = progress bar**: the button fills with the download progress. While a list with several links runs, it also shows the position, e.g. `Stop 45% (2/5)`.
 - **Play last file**: reopen the last downloaded file directly from the GUI.
 - **View Downloads**: open the download directory.
+- **Tray icon**: always present; it blinks while a download is running and its tooltip shows the download state.
+- **Single instance**: a second start of MultiDL does not open another window, it shows the running one (also when it sits in the tray).
+- **English / German UI**: switch the language in the options menu (English is the default).
 - **CMD window toggle**: optionally show the yt-dlp console for debugging.
 - **One-click tool updater**: update yt-dlp, ffmpeg and Deno from the options menu.
 - **Self-update from GitHub**: an update badge appears in the title bar when a newer release exists; one click replaces `MultiDL.exe` and restarts (see *Updating*).
 - **Automatic installation**: download and set up yt-dlp, ffmpeg, and Deno on first run.
 
+### Download List
+
+The list sits directly under the input field.
+
+| Mark | Meaning |
+|---|---|
+| `[  ]` | waiting |
+| `[>>]` | running |
+| `[OK]` | done |
+| `[!!]` | failed |
+
+- **Add**: click the green **+** (or press `Enter`) to put the link of the input field into the list. Links copied to the clipboard are added automatically (clipboard watcher on).
+- **Start**: works the list off from top to bottom. A link still in the input field is added first. A summary above the list shows how many links are running, waiting, done or failed.
+- **Stop**: stops the running download; the link waits again and **Start** continues the list.
+- **REMOVE / CLEAR**: remove the selected link, or clear the whole list. A running download is never removed; stop it first.
+- **Duplicates**: a link that is already waiting or running is not added twice.
+- **New list**: when nothing is open any more, the next added link starts a fresh list and the old `[OK]` / `[!!]` lines go away.
+- When the list is finished the status bar shows the result, and the tray icon stops blinking.
+- **Live** is always a single stream: it uses the input field and does not use the list.
+
 ### Built-in Player: BrAiNPlay
 
 - **Audio and video playback** for supported media files.
-- **Integrated player interface**: switch between the downloader and player using the title-bar player button.
+- **Integrated player interface**: switch between the downloader and player using the title-bar player button (it is highlighted on mouse-over).
 - **Download folder as playlist**: `MultiDL-Downloads` is synced whenever the player opens and then every few seconds, **also while a download is running**. New files show up as soon as they are finished; half-written files and yt-dlp temp files are skipped. Files already in the playlist are not added twice, and a track you removed stays removed until you reopen the player.
 - **Manual playlists**: after loading an `.m3u` with **LOAD**, the playlist no longer follows the download folder. **CLEAR** switches the automatic sync back on.
 - **Click-to-seek waveform**: the waveform reflects the current track; click it to seek.
@@ -41,7 +65,6 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 - **Shuffle and loop**: playback modes for your music collection.
 - **Video playback**: fullscreen on the active monitor or a window sized to the video. `F` switches between the two in every play mode.
 - **VIDEO ON / OFF**: toggle the video while a video is playing. Works for the built-in video window and for videos played through ffplay (OFF = sound only, ffplay restarts at the same position). Closing the video window with its X button switches the video off and updates the button.
-- **Player selection**: choose the available playback method through the options, where supported.
 - **Keyboard shortcuts and media keys**: control playback without relying on the mouse.
 - **Minimize to tray**: playback continues in the background, and the tray tooltip displays the current track.
 
@@ -49,15 +72,15 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 
 The options menu opens when you click the app name in the title bar (it is highlighted on mouse-over).
 
-Depending on the selected options and the current version, configuration includes:
-
-- **Clipboard Watcher**: enable or disable clipboard monitoring for supported links.
-- **Automatic Processing**: control the automatic handling of detected links.
-- **Domain Links**: configure domain-based link detection where supported.
-- **Player Selection**: select an available playback method.
-- **Playback and application settings**: configure the options exposed by the current build.
-
-Settings and available choices depend on the components installed and the functionality implemented in the current version.
+| Section | Entry | What it does |
+|---|---|---|
+| Link-Detection | **Check for Links in Clipboard.** | Clipboard watcher: copied links are added to the download list. |
+| | **Resolve Links without http(s)** | Also detect links like `example.com/path`. |
+| | **Automatic-Mode** | Added links start downloading automatically. |
+| Player | **Use internal player (BrAiNPlay)** | On: Play last File and Live open BrAiNPlay (and the BP button is shown). Off: the system player is used. |
+| Tools | **Show download console** | Show / hide the yt-dlp console window. |
+| | **Update all tools** | Update yt-dlp, ffmpeg and Deno. |
+| Program | **Language** | Switch the UI between English and German. |
 
 ---
 
@@ -65,20 +88,22 @@ Settings and available choices depend on the components installed and the functi
 
 ### Normal Download
 
-1. Paste a URL into the input field
+1. Paste a URL into the input field and click **+** (or press `Enter`). Repeat for more links.
 2. Choose the format: **Video (MP4)**, **Audio (MP3)**, or **Live**.
-3. Choose the mode: **Single** or **Playlist**.
-4. Click **Start**. Progress and status information update while the download runs.
+3. Choose the mode: **Single** or **Multi**.
+4. Click **Start**. The list is worked off one link after another; progress and status information update while it runs.
 5. Click **Play last File** to open the downloaded file, or **View Downloads** to open the download folder.
+
+A single link also works without **+**: type or paste it and just click **Start**.
 
 ### Clipboard Monitoring and Automatic Processing
 
 1. Open the options menu.
-2. Enable the clipboard watcher if you want MultiDL to monitor copied links.
-3. Configure automatic processing and domain link handling according to your preferences.
-4. Copy a supported URL to the clipboard and let MultiDL handle it according to the active settings.
+2. Enable **Check for Links in Clipboard.** if you want MultiDL to monitor copied links.
+3. Enable **Automatic-Mode** if the list should start by itself; otherwise click **Start** when you are done collecting links.
+4. Copy URLs: each one is added to the download list. Only one link per clipboard content is taken.
 
-The links that can be detected and the actions performed automatically depend on the enabled options and supported URL formats.
+While the player view is open, the clipboard is only watched in Automatic-Mode.
 
 ### Live View
 
@@ -105,10 +130,12 @@ Click the **player button** in the title bar to switch between the downloader an
 - Use the playlist controls to add files or folders, remove tracks, clear the playlist, and save or load `.m3u` playlists.
 - Use **Shuffle** or **Loop** to change playback behavior.
 - Use the video controls to toggle video visibility or change the display mode.
-- Click the **minimize button** in the title bar to hide the player in the system tray.
-- Click the tray icon to restore the window. To quit, restore the window and use the **X** button.
+- Click the **minimize button** in the title bar to hide the window in the system tray.
+- Click the tray icon to restore the window (a click while the window is open brings it to the front). To quit, use the **X** button.
 
 ### Keyboard Shortcuts
+
+In the downloader, `Enter` adds the link of the input field to the download list.
 
 The following shortcuts are available in player mode.
 
@@ -165,13 +192,13 @@ All downloader binaries are stored in the `bin\` directory next to the applicati
 
 ### Updating Components
 
-Use the integrated updater (options menu) to update yt-dlp, ffmpeg and Deno.
+Use the integrated updater (options menu, **Update all tools**) to update yt-dlp, ffmpeg and Deno.
 
 ### Updating MultiDL itself
 
 On start, `MultiDL.exe` copies itself to `bin\~MultiDL.exe`, starts that copy and exits. This way `MultiDL.exe` is never locked while the program runs and can simply be replaced.
 
-When a newer release exists, an update badge appears in the title bar. Click it to download `MultiDL.exe` from the latest GitHub release, replace the main file and restart. The release needs an asset named `MultiDL.exe`. You can also just overwrite `MultiDL.exe` by hand while MultiDL is running.
+When a newer release exists, an update badge appears in the title bar. Click it to download `MultiDL.exe` from the latest GitHub release (temporarily saved as `MultiDL_new.exe`), replace the main file and restart. The release needs an asset named `MultiDL.exe`. If the normal download fails, MultiDL tries the `curl.exe` that ships with Windows 10/11, and an error message names the reason. You can also just overwrite `MultiDL.exe` by hand while MultiDL is running.
 
 If MultiDL was not started through the copy (for example when run from the script), the badge only opens the release page.
 
@@ -188,12 +215,16 @@ bin\
     yt-dlp.exe
     ffmpeg.exe
     ffprobe.exe
+    ffplay.exe
     deno.exe
 
 MultiDL-Downloads\
     *.mp4
     *.mp3
     _watch_live.mp4
+
+%AppData%\MultiDL\
+    settings.ini
 
 %AppData%\BrAiNPlay\
     brainplay.ini
@@ -202,10 +233,11 @@ MultiDL-Downloads\
 
 ### Configuration Files
 
+- `settings.ini`: stores the options menu settings (clipboard watcher, domain links, automatic mode, internal player, language).
 - `brainplay.ini`: stores player settings such as volume, balance, shuffle, loop, and video mode.
 - `last.m3u`: stores the automatically saved playlist.
 
-The options menu may expose additional application settings. Refer to the current source code for the exact storage location and supported configuration entries.
+The download list itself is not saved; it is empty after a restart.
 
 ---
 
