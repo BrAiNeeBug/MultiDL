@@ -2,11 +2,9 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.5.0.0
-#AutoIt3Wrapper_UseUpx=y
+#AutoIt3Wrapper_Res_Fileversion=8.5.0.1
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
-#AutoIt3Wrapper_Add_Includes=n
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
 #AutoIt3Wrapper_AU3Check_Parameters=-w 1 -w 2 -w- 4 -w 6
 #AutoIt3Wrapper_Run_Stop_OnError=y
@@ -52,7 +50,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.5.0.0"
+Global Const $APP_VERSION = "8.5.0.1"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (~MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
@@ -68,11 +66,15 @@ Global $g_bAutoStart = (IniRead($CFG_FILE, "features", "auto_start", "0") = "1")
 Global $g_bDomainLinks = (IniRead($CFG_FILE, "features", "domain_links", "1") = "1")
 Global $g_bUseBP = (IniRead($CFG_FILE, "features", "use_brainplay", "1") = "1") ; False = Play last File opens the system player
 Global $g_sLastClipboard = "", $g_sLastAutoURL = "", $g_tClipPoll = TimerInit()
-Global $g_hOptGUI = 0, $g_hOptClip = 0, $g_hOptDomain = 0, $g_hOptAuto = 0, $g_hOptClose = 0, $g_hOptConsole = 0, $g_hOptUpdate = 0, $g_hOptBP = 0, $g_hOptMulti = 0, $g_hOptLang = 0
-Global $g_bMultiInst = (IniRead($CFG_FILE, "features", "multi_instance", "0") = "1") ; False (default) = only one MultiDL at a time
+Global $g_hOptGUI = 0, $g_hOptClip = 0, $g_hOptDomain = 0, $g_hOptAuto = 0, $g_hOptClose = 0, $g_hOptConsole = 0, $g_hOptUpdate = 0, $g_hOptBP = 0, $g_hOptLang = 0
 Global $g_sLang = IniRead($CFG_FILE, "features", "language", "en") ; UI language: "en" (default) or "de"
 If $g_sLang <> "de" Then $g_sLang = "en"
 Global $g_bShowReq = False, $g_tFFKey = TimerInit() ; a second start asked this instance to show its window / ffplay key poll timer
+; ---- download list (queue): link / state (0 waiting, 1 running, 2 done, 3 failed) / format when it was added (bit 1 = audio, bit 2 = multi) ----
+Global $g_aQU[0], $g_aQS[0], $g_aQF[0]
+Global $g_bQRun = False, $g_iQCur = -1, $g_iQEnd = 3 ; list is being worked off / index of the running link / how the last download ended (2 done, 3 failed)
+Global $g_hQList = 0, $g_hQAdd = 0, $g_hQInfo = 0, $g_hQDel = 0, $g_hQClr = 0, $g_kQAdd = 0, $g_aAccQ[1][2]
+Global $g_bTrayFlash = False ; tray icon blinks while a download runs
 ; ---- single instance: a second start shows the running window (also from the tray) and quits - before the copy/relaunch dance ----
 _SingleInstance(False)
 _SelfRelaunch()
@@ -153,14 +155,42 @@ GUICtrlSetBkColor($hClose, $CLR_PANEL)
 Local $hLine = GUICtrlCreateLabel("", 0, 36, 560, 2)
 GUICtrlSetBkColor($hLine, $CLR_ACCENT)
 ; ---- URL Eingabe ----
-Local $hLabelURL = GUICtrlCreateLabel(_L("Data URL:"), 24, 58, 250, 18)
+Local $hLabelURL = GUICtrlCreateLabel(_L("Data URL:"), 24, 58, 76, 18)
 GUICtrlSetFont($hLabelURL, 9, 600, 0, "Segoe UI")
 GUICtrlSetColor($hLabelURL, $CLR_TEXT)
 GUICtrlSetBkColor($hLabelURL, $CLR_BG)
-Local $hInput = GUICtrlCreateEdit("", 24, 80, 512, 84, $ES_MULTILINE + $ES_AUTOVSCROLL + $WS_VSCROLL)
+Local $hInput = GUICtrlCreateInput("", 24, 80, 468, 24, $ES_AUTOHSCROLL)
 GUICtrlSetFont($hInput, 9, 400, 0, "Consolas")
 GUICtrlSetColor($hInput, $CLR_TEXT)
 GUICtrlSetBkColor($hInput, $CLR_INPUT)
+; ---- download list: "+" (or Enter) puts the link of the input field into the list ----
+$g_hQAdd = GUICtrlCreateLabel("+", 498, 80, 38, 24, BitOR($SS_CENTER, $SS_CENTERIMAGE))
+GUICtrlSetFont($g_hQAdd, 12, 700, 0, "Segoe UI")
+GUICtrlSetColor($g_hQAdd, $CLR_TEXT)
+GUICtrlSetBkColor($g_hQAdd, 0x00AA44)
+GUICtrlSetTip($g_hQAdd, _L("Add the link to the download list   (Enter)"))
+$g_hQInfo = GUICtrlCreateLabel("", 104, 60, 270, 16, $SS_NOPREFIX)
+GUICtrlSetFont($g_hQInfo, 8, 400, 0, "Segoe UI")
+GUICtrlSetColor($g_hQInfo, $CLR_MUTED)
+GUICtrlSetBkColor($g_hQInfo, $CLR_BG)
+$g_hQDel = GUICtrlCreateLabel(_L("REMOVE"), 390, 56, 76, 20, BitOR($SS_CENTER, $SS_CENTERIMAGE))
+GUICtrlSetFont($g_hQDel, 8, 700, 0, "Segoe UI")
+GUICtrlSetColor($g_hQDel, $CLR_MUTED)
+GUICtrlSetBkColor($g_hQDel, 0x222222)
+GUICtrlSetTip($g_hQDel, _L("Remove the selected link from the list"))
+$g_hQClr = GUICtrlCreateLabel(_L("CLEAR"), 470, 56, 66, 20, BitOR($SS_CENTER, $SS_CENTERIMAGE))
+GUICtrlSetFont($g_hQClr, 8, 700, 0, "Segoe UI")
+GUICtrlSetColor($g_hQClr, $CLR_MUTED)
+GUICtrlSetBkColor($g_hQClr, 0x222222)
+GUICtrlSetTip($g_hQClr, _L("Clear the list (a running download stays)"))
+$g_hQList = GUICtrlCreateList("", 24, 112, 512, 64, BitOR($LBS_NOTIFY, $WS_VSCROLL, $LBS_NOINTEGRALHEIGHT))
+GUICtrlSetFont($g_hQList, 8, 400, 0, "Consolas")
+GUICtrlSetBkColor($g_hQList, $CLR_PANEL)
+GUICtrlSetColor($g_hQList, $CLR_TEXT)
+$g_kQAdd = GUICtrlCreateDummy()
+$g_aAccQ[0][0] = "{ENTER}"
+$g_aAccQ[0][1] = $g_kQAdd
+GUISetAccelerators($g_aAccQ, $hGUI) ; Enter = add (the player keys replace this while the player is open, see BP_Keys)
 ; ---- Trennlinie ----
 Local $hLine2 = GUICtrlCreateLabel("", 24, 182, 512, 1)
 GUICtrlSetBkColor($hLine2, 0x2A2A2A)
@@ -341,6 +371,8 @@ $BP_fTray = False
 Opt("TrayMenuMode", 1) ; no default tray menu
 Opt("TrayOnEventMode", 1)
 TraySetOnEvent($TRAY_EVENT_PRIMARYUP, "BP_FromTray") ; single click on the tray icon restores the window
+TraySetState($TRAY_ICONSTATE_SHOW) ; the tray icon is always there now (it blinks while a download runs)
+BP_Tip()
 OnAutoItExitRegister("BP_Quit")
 ; Embedded BrAiNPlay controls, styled like MultiDL.
 Global $BP_bTV = BP_B(_L("VIDEO ON"), 452, 48, 84, 24, $BP_TXT, 9)
@@ -457,7 +489,7 @@ Func BP_Keys($on) ; player keys only active in player mode, otherwise they eat l
 	If $on Then
 		GUISetAccelerators($BP_aK, $hGUI)
 	Else
-		GUISetAccelerators(0, $hGUI)
+		GUISetAccelerators($g_aAccQ, $hGUI)
 	EndIf
 EndFunc   ;==>BP_Keys
 Global $BP_aControls[19] = [$BP_bTV, $BP_lblNow, $BP_lblTime, $BP_bPrev, $BP_bPlay, $BP_bStop, $BP_bNext, $BP_bShuf, $BP_bLoop, $BP_lblVol, $BP_lblBal, $BP_bPL, $BP_lst, $BP_bAddD, $BP_bDel, $BP_bClr, $BP_bSave, $BP_bLoad, $BP_bAddFile]
@@ -493,7 +525,7 @@ BP_SetControls($GUI_HIDE)
 BP_Apply()
 BP_PLText()
 ; ---- Optionen-Fenster (wird bei Bedarf eingeblendet) ----
-$g_hOptGUI = GUICreate(_L("MultiDL Options"), 280, 456, -1, -1, $WS_CAPTION + $WS_SYSMENU, -1, $hGUI)
+$g_hOptGUI = GUICreate(_L("MultiDL Options"), 280, 426, -1, -1, $WS_CAPTION + $WS_SYSMENU, -1, $hGUI)
 Local $hOptTitle = GUICtrlCreateLabel(_L("Link-Detection"), 16, 14, 248, 22)
 $g_hOptClip = GUICtrlCreateCheckbox(_L("Check for Links in Clipboard."), 18, 44, 250, 22)
 $g_hOptDomain = GUICtrlCreateCheckbox(_L("Resolve Links without http(s)"), 18, 72, 250, 22)
@@ -508,10 +540,8 @@ Local $hOptTitle2 = GUICtrlCreateLabel(_L("Tools"), 16, 204, 248, 22)
 $g_hOptConsole = GUICtrlCreateButton(_ConsoleBtnText(), 18, 230, 244, 30)
 $g_hOptUpdate = GUICtrlCreateButton(_L("Update all tools"), 18, 266, 244, 30)
 Local $hOptTitle3 = GUICtrlCreateLabel(_L("Program"), 16, 306, 248, 22)
-$g_hOptMulti = GUICtrlCreateCheckbox(_L("Allow multiple instances (Multi-Run)"), 18, 332, 250, 22)
-If $g_bMultiInst Then GUICtrlSetState($g_hOptMulti, $GUI_CHECKED)
-$g_hOptLang = GUICtrlCreateButton(_LangBtnText(), 18, 362, 244, 30)
-$g_hOptClose = GUICtrlCreateButton(_L("CLOSE"), 92, 410, 95, 28)
+$g_hOptLang = GUICtrlCreateButton(_LangBtnText(), 18, 332, 244, 30)
+$g_hOptClose = GUICtrlCreateButton(_L("CLOSE"), 92, 380, 95, 28)
 GUICtrlSetState($g_hOptGUI, $GUI_HIDE)
 If Not $g_bUseBP Then GUICtrlSetState($hBtnPlayer, $GUI_HIDE) ; internal player disabled -> no BP button
 ; ---- Fenster anzeigen ----
@@ -521,7 +551,7 @@ If $g_bClipWatch Then $g_sLastClipboard = ClipGet() ; vorhandenen Clipboard-Inha
 _CheckForUpdate($hUpdateBadge)
 _ModeStatus($hStatus)
 Local $tBPUI = TimerInit()
-Local $tHov = TimerInit(), $bTitleHov = False
+Local $tHov = TimerInit(), $bTitleHov = False, $iBPCol = $CLR_TEXT
 Local $tAct = TimerInit(), $bAct = False ; make sure the window really has the focus after start (else the first click is lost)
 ; ---- Hauptschleife ----
 Local $bLiveMode = False
@@ -580,13 +610,20 @@ While 1
 	If TimerDiff($tHov) > 60 Then
 		$tHov = TimerInit()
 		Local $aHI = GUIGetCursorInfo($hGUI)
-		Local $bH = False
+		Local $bH = False, $bHB = False
 		If IsArray($aHI) Then
 			If $aHI[0] >= 20 And $aHI[0] <= 160 And $aHI[1] >= 0 And $aHI[1] <= 36 And Not $BP_fTray Then $bH = True
+			If $aHI[0] >= 460 And $aHI[0] <= 485 And $aHI[1] >= 0 And $aHI[1] <= 36 And Not $BP_fTray And ($g_bUseBP Or $BP_bPlayerMode) Then $bHB = True
 		EndIf
 		If $bH <> $bTitleHov Then
 			$bTitleHov = $bH
 			GUICtrlSetColor($hTitleText, $bH ? $CLR_ACCENT : $CLR_TEXT)
+		EndIf
+		; BP button: text turns red on mouse over (dark while the player is open, because the button is red then)
+		Local $iBPNew = $bHB ? ($BP_bPlayerMode ? $CLR_BG : $CLR_ACCENT) : $CLR_TEXT
+		If $iBPNew <> $iBPCol Then
+			$iBPCol = $iBPNew
+			GUICtrlSetColor($hBtnPlayer, $iBPNew)
 		EndIf
 	EndIf
 	; ---- a file should be played in BrAiNPlay (Play last File and live view share this) ----
@@ -630,6 +667,23 @@ While 1
 			_ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		EndIf
 	EndIf
+	; ---- download list: a download ended -> mark it, then start the next link ----
+	If $g_iQCur >= 0 And $hDLProc = 0 Then
+		$g_aQS[$g_iQCur] = ($g_iQEnd = 2) ? 2 : 3
+		$g_iQCur = -1
+		_QRefresh()
+		If $g_bQRun And _QCount(0) = 0 Then
+			$g_bQRun = False
+			_SetStatus($hStatus, _L("List finished") & ": " & _QInfoText(), 0x00AA44)
+		EndIf
+	EndIf
+	If $g_bQRun And $g_iQCur < 0 And $hDLProc = 0 And Not $bLiveMode Then _QStartNext($hStatus, $hProgBar, $hProgLabel, $hProgPct)
+	; ---- tray icon blinks while a download runs ----
+	If ($hDLProc <> 0) <> $g_bTrayFlash Then
+		$g_bTrayFlash = ($hDLProc <> 0)
+		TraySetState($g_bTrayFlash ? $TRAY_ICONSTATE_FLASH : $TRAY_ICONSTATE_STOPFLASH)
+		BP_Tip()
+	EndIf
 	; ---- embedded BrAiNPlay runtime ----
 	If $BP_bPlayerMode And $BP_iDrag Then BP_Drag()
 	If $BP_bPlayerMode Or $BP_fPlay Then ; the player keeps going (next track, video) while the download view is shown
@@ -654,25 +708,28 @@ While 1
 			$g_sLastClipboard = $sClipNow
 			Local $sDetected = _DetectURL($sClipNow, $g_bDomainLinks)
 			If $sDetected <> "" Then
-				GUICtrlSetData($hInput, $sDetected)
-				_RefreshInputLink($hInput)
-				_UpdateStartAppearance($hBtnDownload, True)
-				_SetStatus($hStatus, "Link detected in clipboard.", 0x4FC3F7)
-				If $g_bAutoStart And $sDetected <> $g_sLastAutoURL And $hDLProc = 0 Then
-					$g_sLastAutoURL = $sDetected
-					Local $sAutoClean = _CleanURL($sDetected)
-					If $bLiveMode Then
-						_StartLive($sAutoClean, $hProgBar, $hProgLabel, $hProgPct, $hBtnDownload, $PROG_Y, $PROG_H)
-					Else
-						_StartDownload($sAutoClean, $hStatus, $hProgBar, $hProgLabel, $hProgPct)
+				If $bLiveMode Then ; live is one stream at a time: the link goes into the input field as before
+					GUICtrlSetData($hInput, $sDetected)
+					_RefreshInputLink($hInput)
+					_UpdateStartAppearance($hBtnDownload, True)
+					_SetStatus($hStatus, "Link detected in clipboard.", 0x4FC3F7)
+					If $g_bAutoStart And $sDetected <> $g_sLastAutoURL And $hDLProc = 0 Then
+						$g_sLastAutoURL = $sDetected
+						_StartLive(_CleanURL($sDetected), $hProgBar, $hProgLabel, $hProgPct, $hBtnDownload, $PROG_Y, $PROG_H)
 					EndIf
+				ElseIf _QAdd($sDetected) Then ; every copied link goes into the download list
+					_UpdateStartAppearance($hBtnDownload, True)
+					_SetStatus($hStatus, "Link added to the list.", 0x4FC3F7)
+					If $g_bAutoStart Then $g_bQRun = True
+				Else
+					_SetStatus($hStatus, "Link is already in the list.", 0xFFAA00)
 				EndIf
 			EndIf
 		EndIf
 	EndIf
 	; Start-Button-Farbe anhand des Eingabefelds aktualisieren
 	If $hDLProc <> 0 Or $BP_bPlayerMode Then $g_iStartState = -1 ; Button wird anderswo umgefaerbt -> danach einmal neu setzen
-	If Not $BP_bPlayerMode And $hDLProc = 0 Then _UpdateStartAppearance($hBtnDownload, _DetectURL(GUICtrlRead($hInput), $g_bDomainLinks) <> "")
+	If Not $BP_bPlayerMode And $hDLProc = 0 Then _UpdateStartAppearance($hBtnDownload, _DetectURL(GUICtrlRead($hInput), $g_bDomainLinks) <> "" Or _QCount(0) > 0)
 	; Optionsfenster hat eigene Nachrichten
 	If $aMsg[1] = $g_hOptGUI Then
 		If $iMsg = $GUI_EVENT_CLOSE Or $iMsg = $g_hOptClose Then
@@ -685,9 +742,6 @@ While 1
 			$g_sLang = ($g_sLang = "de") ? "en" : "de"
 			IniWrite($CFG_FILE, "features", "language", $g_sLang)
 			_ApplyLang()
-		ElseIf $iMsg = $g_hOptMulti Then
-			$g_bMultiInst = (BitAND(GUICtrlRead($g_hOptMulti), $GUI_CHECKED) = $GUI_CHECKED)
-			IniWrite($CFG_FILE, "features", "multi_instance", $g_bMultiInst ? "1" : "0")
 		ElseIf $iMsg = $g_hOptConsole Then
 			$bShowCMD = Not $bShowCMD
 			GUICtrlSetData($g_hOptConsole, _ConsoleBtnText())
@@ -757,7 +811,6 @@ While 1
 				GUICtrlSetState($g_hOptAuto, $g_bAutoStart ? $GUI_CHECKED : $GUI_UNCHECKED)
 				GUICtrlSetData($g_hOptConsole, _ConsoleBtnText())
 				GUICtrlSetState($g_hOptBP, $g_bUseBP ? $GUI_CHECKED : $GUI_UNCHECKED)
-				GUICtrlSetState($g_hOptMulti, $g_bMultiInst ? $GUI_CHECKED : $GUI_UNCHECKED)
 				GUISetState(@SW_SHOW, $g_hOptGUI)
 			EndIf
 			; PLAYER-Button
@@ -1035,25 +1088,53 @@ While 1
 				GUICtrlSetData($hProgPct, "")
 				_SetStatus($hStatus, "Download stopped.", 0xFFAA00)
 				GUICtrlSetData($hBtnDownload, _L("Start"))
-				_UpdateStartAppearance($hBtnDownload, _DetectURL(GUICtrlRead($hInput), $g_bDomainLinks) <> "")
+				If $g_iQCur >= 0 Then $g_aQS[$g_iQCur] = 0 ; the stopped link waits again (Start continues the list)
+				$g_iQCur = -1
+				$g_bQRun = False
+				_QRefresh()
+				_UpdateStartAppearance($hBtnDownload, _DetectURL(GUICtrlRead($hInput), $g_bDomainLinks) <> "" Or _QCount(0) > 0)
 			Else
 				_RefreshInputLink($hInput)
 				Local $sRaw = GUICtrlRead($hInput)
 				$sRaw = StringStripWS($sRaw, 3)
-				If $sRaw = "" Then
-					_SetStatus($hStatus, "NO Link.", 0xFFAA00)
-				Else
-					Local $sNorm = _DetectURL($sRaw, $g_bDomainLinks)
-					If $sNorm <> "" Then $sRaw = $sNorm
-					Local $sClean = _CleanURL($sRaw)
-					$g_sLastAutoURL = $sRaw
-					If $bLiveMode Then
-						_StartLive($sClean, $hProgBar, $hProgLabel, $hProgPct, $hBtnDownload, $PROG_Y, $PROG_H)
+				If $bLiveMode Then
+					If $sRaw = "" Then
+						_SetStatus($hStatus, "NO Link.", 0xFFAA00)
 					Else
-						_StartDownload($sClean, $hStatus, $hProgBar, $hProgLabel, $hProgPct)
+						Local $sNorm = _DetectURL($sRaw, $g_bDomainLinks)
+						If $sNorm <> "" Then $sRaw = $sNorm
+						$g_sLastAutoURL = $sRaw
+						_StartLive(_CleanURL($sRaw), $hProgBar, $hProgLabel, $hProgPct, $hBtnDownload, $PROG_Y, $PROG_H)
+					EndIf
+				Else ; link in the input field (if any) joins the list, then the list is worked off
+					Local $iAdded = _QAddInput($hInput, $hStatus)
+					If _QCount(0) > 0 Then
+						$g_bQRun = True
+					ElseIf $iAdded = -1 Then
+						_SetStatus($hStatus, "NO Link.", 0xFFAA00)
 					EndIf
 				EndIf
 			EndIf
+			; Download list: + / Enter, REMOVE, CLEAR
+		Case $iMsg = $g_hQAdd Or $iMsg = $g_kQAdd
+			If Not $BP_bPlayerMode And Not $bLiveMode Then
+				If _QAddInput($hInput, $hStatus) = 1 And $g_bAutoStart Then $g_bQRun = True
+			EndIf
+		Case $iMsg = $g_hQDel
+			Local $iQSel = GUICtrlSendMsg($g_hQList, $LB_GETCURSEL, 0, 0)
+			If $iQSel >= 0 And $iQSel < UBound($g_aQS) Then
+				If $g_aQS[$iQSel] = 1 Then
+					_SetStatus($hStatus, "Stop the running download first.", 0xFFAA00)
+				Else
+					_QDelete($iQSel)
+					_QRefresh()
+				EndIf
+			EndIf
+		Case $iMsg = $g_hQClr
+			For $iQ = UBound($g_aQS) - 1 To 0 Step -1
+				If $g_aQS[$iQ] <> 1 Then _QDelete($iQ)
+			Next
+			_QRefresh()
 			; Einfuegen & Start
 		Case $iMsg = $hBtnPaste
 			If $hDLProc <> 0 Then
@@ -1087,6 +1168,125 @@ WEnd
 BP_Quit()
 GUIDelete($hGUI)
 Exit
+; ============================================================
+;  Download list (queue)
+; ============================================================
+Func _QCount($iState)
+	Local $n = 0
+	For $i = 0 To UBound($g_aQS) - 1
+		If $g_aQS[$i] = $iState Then $n += 1
+	Next
+	Return $n
+EndFunc   ;==>_QCount
+Func _QFirstWaiting()
+	For $i = 0 To UBound($g_aQS) - 1
+		If $g_aQS[$i] = 0 Then Return $i
+	Next
+	Return -1
+EndFunc   ;==>_QFirstWaiting
+Func _QDelete($iIdx)
+	Local $n = UBound($g_aQU)
+	If $iIdx < 0 Or $iIdx >= $n Then Return
+	For $j = $iIdx To $n - 2
+		$g_aQU[$j] = $g_aQU[$j + 1]
+		$g_aQS[$j] = $g_aQS[$j + 1]
+		$g_aQF[$j] = $g_aQF[$j + 1]
+	Next
+	ReDim $g_aQU[$n - 1]
+	ReDim $g_aQS[$n - 1]
+	ReDim $g_aQF[$n - 1]
+	If $g_iQCur > $iIdx Then $g_iQCur -= 1
+EndFunc   ;==>_QDelete
+; link -> list (with the format that is selected right now). False if it is already waiting / running.
+Func _QAdd($sURL)
+	$sURL = StringStripWS($sURL, 3)
+	If $sURL = "" Then Return False
+	For $i = 0 To UBound($g_aQU) - 1
+		If $g_aQU[$i] = $sURL And $g_aQS[$i] < 2 Then Return False
+	Next
+	If _QCount(0) + _QCount(1) = 0 Then ; nothing open any more: this starts a fresh list, the finished lines of the last one go away
+		For $i = UBound($g_aQS) - 1 To 0 Step -1
+			_QDelete($i)
+		Next
+	EndIf
+	Local $n = UBound($g_aQU)
+	ReDim $g_aQU[$n + 1]
+	ReDim $g_aQS[$n + 1]
+	ReDim $g_aQF[$n + 1]
+	$g_aQU[$n] = $sURL
+	$g_aQS[$n] = 0
+	$g_aQF[$n] = ($bMP3Mode ? 1 : 0) + ($BP_bPlaylistMode ? 2 : 0)
+	_QRefresh()
+	Return True
+EndFunc   ;==>_QAdd
+; input field -> list, field is emptied. Returns 1 added, 0 not added (bad link / already in the list), -1 field was empty
+Func _QAddInput($hInput, $hStatus)
+	Local $sIn = StringStripWS(GUICtrlRead($hInput), 3)
+	If $sIn = "" Then Return -1
+	Local $sDet = _DetectURL($sIn, $g_bDomainLinks)
+	If $sDet = "" Then
+		_SetStatus($hStatus, "Bad Link.", 0xFFAA00)
+		Return 0
+	EndIf
+	GUICtrlSetData($hInput, "")
+	If Not _QAdd($sDet) Then
+		_SetStatus($hStatus, "Link is already in the list.", 0xFFAA00)
+		Return 0
+	EndIf
+	_SetStatus($hStatus, "Link added to the list.", 0x4FC3F7)
+	Return 1
+EndFunc   ;==>_QAddInput
+Func _QStartNext($hStatus, $hProgBar, $hProgLabel, $hProgPct)
+	Local $i = _QFirstWaiting()
+	If $i < 0 Then
+		$g_bQRun = False
+		Return
+	EndIf
+	$g_iQCur = $i
+	$g_aQS[$i] = 1
+	$g_iQEnd = 3
+	_QRefresh()
+	; every link is loaded with the format (Video/Audio, Single/Multi) that was selected when it was added
+	Local $bM = $bMP3Mode, $bP = $BP_bPlaylistMode
+	$bMP3Mode = (BitAND($g_aQF[$i], 1) <> 0)
+	$BP_bPlaylistMode = (BitAND($g_aQF[$i], 2) <> 0)
+	_StartDownload(_CleanURL($g_aQU[$i]), $hStatus, $hProgBar, $hProgLabel, $hProgPct)
+	$bMP3Mode = $bM
+	$BP_bPlaylistMode = $bP
+	If $hDLProc = 0 Then ; did not start (yt-dlp / ffmpeg missing ...): mark it and stop the list
+		$g_aQS[$i] = 3
+		$g_iQCur = -1
+		$g_bQRun = False
+		_QRefresh()
+	EndIf
+EndFunc   ;==>_QStartNext
+Func _QTag() ; "  (2/5)" in the Stop button while a list with several links is worked off
+	Local $n = UBound($g_aQU)
+	If $g_iQCur < 0 Or $n < 2 Then Return ""
+	Return "  (" & ($g_iQCur + 1) & "/" & $n & ")"
+EndFunc   ;==>_QTag
+Func _QInfoText() ; "1 running, 2 waiting, 1 done, 1 failed"
+	Local $aOrd[4] = [1, 0, 2, 3], $aTxt[4] = ["waiting", "running", "done", "failed"], $s = "", $n = 0
+	For $k = 0 To 3
+		$n = _QCount($aOrd[$k])
+		If $n > 0 Then
+			If $s <> "" Then $s &= ", "
+			$s &= $n & " " & _L($aTxt[$aOrd[$k]])
+		EndIf
+	Next
+	Return $s
+EndFunc   ;==>_QInfoText
+Func _QRefresh() ; list control + info text (keeps scroll position and selection)
+	Local $iTop = GUICtrlSendMsg($g_hQList, 0x018E, 0, 0), $iSel = GUICtrlSendMsg($g_hQList, $LB_GETCURSEL, 0, 0) ; LB_GETTOPINDEX
+	Local $aTag[4] = ["[  ] ", "[>>] ", "[OK] ", "[!!] "]
+	GUICtrlSetData($g_hQList, "")
+	For $i = 0 To UBound($g_aQU) - 1
+		GUICtrlSetData($g_hQList, $aTag[$g_aQS[$i]] & StringReplace(StringRegExpReplace($g_aQU[$i], "(?i)^https?://(www\.)?", ""), "|", "/"))
+	Next
+	GUICtrlSendMsg($g_hQList, 0x0197, $iTop, 0) ; LB_SETTOPINDEX
+	If $iSel >= 0 Then GUICtrlSendMsg($g_hQList, $LB_SETCURSEL, $iSel, 0)
+	GUICtrlSetData($g_hQInfo, _QInfoText())
+EndFunc   ;==>_QRefresh
 ; Single/Multi-Knoepfe neu zeichnen (bei Live ausgegraut)
 Func _ModePaint($hSingle, $hMulti)
 	If $g_bLiveSel Then
@@ -1164,6 +1364,11 @@ Func _ShowNormalControls($iState, $hLabelURL, $hInput, $hLine2, $hLabelFormat, $
 	GUICtrlSetState($hPlayLabel, $iState)
 	GUICtrlSetState($hStatus, $iState)
 	GUICtrlSetState($hToggleLive, $iState)
+	GUICtrlSetState($g_hQAdd, $iState)
+	GUICtrlSetState($g_hQInfo, $iState)
+	GUICtrlSetState($g_hQDel, $iState)
+	GUICtrlSetState($g_hQClr, $iState)
+	GUICtrlSetState($g_hQList, $iState)
 EndFunc   ;==>_ShowNormalControls
 ; ============================================================
 ;  Show/Hide Live Controls
@@ -1262,6 +1467,12 @@ Func _ApplyLang()
 	GUICtrlSetData($hToggleSingle, _L("Single"))
 	GUICtrlSetData($hTogglePlaylist, _L("Multi"))
 	GUICtrlSetData($hToggleLive, _L("Live"))
+	GUICtrlSetData($g_hQDel, _L("REMOVE"))
+	GUICtrlSetData($g_hQClr, _L("CLEAR"))
+	GUICtrlSetTip($g_hQAdd, _L("Add the link to the download list   (Enter)"))
+	GUICtrlSetTip($g_hQDel, _L("Remove the selected link from the list"))
+	GUICtrlSetTip($g_hQClr, _L("Clear the list (a running download stays)"))
+	_QRefresh()
 	GUICtrlSetData($hBtnPlay, _L("> Play last File"))
 	GUICtrlSetData($hBtnFolder, _L("[>] View Downloads"))
 	If $sLastFile = "" Then GUICtrlSetData($hPlayLabel, _L("No download completed yet."))
@@ -1279,7 +1490,6 @@ Func _ApplyLang()
 	GUICtrlSetData($g_hOptConsole, _ConsoleBtnText())
 	GUICtrlSetData($g_hOptUpdate, _L("Update all tools"))
 	GUICtrlSetData($hOptTitle3, _L("Program"))
-	GUICtrlSetData($g_hOptMulti, _L("Allow multiple instances (Multi-Run)"))
 	GUICtrlSetData($g_hOptLang, _LangBtnText())
 	GUICtrlSetData($g_hOptClose, _L("CLOSE"))
 	; BrAiNPlay
@@ -1393,7 +1603,6 @@ Func _LTable()
 	$t &= "Show download console: OFF|Download-Konsole anzeigen: AUS" & @LF
 	$t &= "Update all tools|Alle Tools aktualisieren" & @LF
 	$t &= "Program|Programm" & @LF
-	$t &= "Allow multiple instances (Multi-Run)|Mehrere Instanzen erlauben (Multi-Run)" & @LF
 	$t &= "VIDEO ON|VIDEO AN" & @LF
 	$t &= "VIDEO OFF|VIDEO AUS" & @LF
 	$t &= "Show / hide the video   (V = video on/off, F = fullscreen / window)|Video ein-/ausblenden   (V = Video an/aus, F = Vollbild / Fenster)" & @LF
@@ -1421,6 +1630,17 @@ Func _LTable()
 	$t &= "Add folder|Ordner hinzufügen" & @LF
 	$t &= "Save playlist|Playlist speichern" & @LF
 	$t &= "Load playlist|Playlist laden" & @LF
+	$t &= "Link added to the list.|Link zur Liste hinzugefügt." & @LF
+	$t &= "Link is already in the list.|Link ist schon in der Liste." & @LF
+	$t &= "Stop the running download first.|Erst den laufenden Download stoppen." & @LF
+	$t &= "Add the link to the download list   (Enter)|Link zur Download-Liste hinzufügen   (Enter)" & @LF
+	$t &= "Remove the selected link from the list|Markierten Link aus der Liste entfernen" & @LF
+	$t &= "Clear the list (a running download stays)|Liste leeren (ein laufender Download bleibt)" & @LF
+	$t &= "List finished|Liste fertig" & @LF
+	$t &= "waiting|wartet" & @LF
+	$t &= "running|läuft" & @LF
+	$t &= "done|fertig" & @LF
+	$t &= "failed|fehlgeschlagen" & @LF
 	$t &= "CLOSE|SCHLIESSEN"
 	Return $t
 EndFunc   ;==>_LTable
@@ -1697,7 +1917,7 @@ Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
 	GUICtrlSetPos($hProgBar, 24, $PROG_Y, 0, $PROG_H)
 	GUICtrlSetBkColor($hProgBar, $CLR_ACCENT)
 	GUICtrlSetData($hProgLabel, _L("Starting Download..."))
-	GUICtrlSetData($hBtnDownload, _L("Stop"))
+	GUICtrlSetData($hBtnDownload, _L("Stop") & _QTag())
 	_BtnBk($hBtnDownload, 0x3A0A0A) ; dark track, the red fill shows the progress
 	GUICtrlSetData($hProgPct, "")
 	$sLastFile = ""
@@ -1821,6 +2041,7 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 			GUICtrlSetData($hProgLabel, _L("Download failed."))
 		EndIf
 		_SetStatus($hStatus, _DLErrorStatus($sDLError), 0xFF5252)
+		$g_iQEnd = 3
 		$hDLProc = 0
 		$bDLFailed = False
 		$sDLError = ""
@@ -1867,6 +2088,7 @@ Func _ReadProgress($hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		GUICtrlSetData($hPlayLabel, "> " & $sDispName)
 		GUICtrlSetColor($hPlayLabel, 0x00AA44)
 	EndIf
+	$g_iQEnd = 2
 	$hDLProc = 0
 	GUICtrlSetData($hBtnDownload, _L("Start"))
 	_BtnBk($hBtnDownload, 0x00AA44)
@@ -1885,7 +2107,7 @@ Func _ParseProgressLine($sLine, $hProgBar, $hProgLabel, $hProgPct, $hStatus)
 		Local $aFP = ControlGetPos($hGUI, "", $hProgBar)
 		If Not IsArray($aFP) Or $aFP[2] <> $iWidth Then GUICtrlSetPos($hProgBar, 24, $PROG_Y, $iWidth, $PROG_H) ; only when it changed (avoids flicker)
 		GUICtrlSetData($hProgPct, StringFormat("%.0f%%", $fPct))
-		Local $sBtnTxt = _L("Stop") & "  " & StringFormat("%.0f%%", $fPct)
+		Local $sBtnTxt = _L("Stop") & "  " & StringFormat("%.0f%%", $fPct) & _QTag()
 		If GUICtrlRead($hBtnDownload) <> $sBtnTxt Then GUICtrlSetData($hBtnDownload, $sBtnTxt)
 		Local $sShort = StringRegExpReplace($sLine, "^\[download\]\s+", "")
 		If StringLen($sShort) > 65 Then $sShort = StringLeft($sShort, 65) & "..."
@@ -2487,7 +2709,6 @@ Func _OtherInstance($bCreate) ; True = another MultiDL holds the mutex. $bCreate
 	Return True
 EndFunc   ;==>_OtherInstance
 Func _SingleInstance($bCreate)
-	If $g_bMultiInst Then Return
 	Local $t = TimerInit(), $iWait = StringInStr($CmdLineRaw, "/updated") ? 10000 : 0 ; after an update the old instance is just closing
 	While _OtherInstance($bCreate)
 		If TimerDiff($t) >= $iWait Then
@@ -4342,20 +4563,23 @@ Func BP_ToTray() ; minimize into the tray (icon only while hidden)
 	$BP_fTray = True
 	BP_VidApply() ; video window follows (hidden while in tray)
 	GUISetState(@SW_HIDE, $hGUI)
-	TraySetState($TRAY_ICONSTATE_SHOW)
 	BP_Tip()
 EndFunc   ;==>BP_ToTray
 Func BP_FromTray()
-	If Not $BP_fTray Then Return
+	If Not $BP_fTray Then ; the icon stays in the tray all the time: a click while the window is open just brings it to the front
+		WinActivate($hGUI)
+		Return
+	EndIf
 	$BP_fTray = False
-	TraySetState($TRAY_ICONSTATE_HIDE)
 	GUISetState(@SW_SHOW, $hGUI)
 	GUISetState(@SW_RESTORE, $hGUI)
 	WinActivate($hGUI)
 	BP_VidApply()
 EndFunc   ;==>BP_FromTray
-Func BP_Tip() ; tray tooltip = current track
-	TraySetToolTip($BP_fPlay ? StringLeft($BP_sNow, 120) : $APP_TITLE)
+Func BP_Tip() ; tray tooltip = current track (+ download state)
+	Local $sTip = $BP_fPlay ? StringLeft($BP_sNow, 90) : $APP_TITLE
+	If $hDLProc <> 0 Then $sTip = _L("Download running...") & @CRLF & $sTip
+	TraySetToolTip($sTip)
 EndFunc   ;==>BP_Tip
 Func BP_Name($f)
 	Return StringRegExpReplace($f, "^.*\\|\.[^.]*$", "")
