@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.5.0.1
+#AutoIt3Wrapper_Res_Fileversion=8.5.0.2
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
@@ -50,7 +50,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.5.0.1"
+Global Const $APP_VERSION = "8.5.0.2"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (~MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
@@ -2733,7 +2733,7 @@ EndFunc   ;==>_OnShowMe
 Func _SelfRelaunch()
 	If Not @Compiled Then Return
 	If StringLeft(@ScriptName, 1) = "~" Then
-		FileDelete($APP_DIR & "\" & StringTrimLeft(@ScriptName, 1) & ".new") ; leftover of an update
+		FileDelete($APP_DIR & "\" & StringTrimRight(StringTrimLeft(@ScriptName, 1), 4) & "_new.exe") ; leftover of an update
 		Return
 	EndIf
 	DirCreate($BIN_DIR)
@@ -2751,16 +2751,33 @@ Func _SelfRelaunch()
 	Exit
 EndFunc   ;==>_SelfRelaunch
 Func _SelfUpdate() ; click on the update badge
-	Local $sName = StringTrimLeft(@ScriptName, 1), $sMain = $APP_DIR & "\" & $sName, $sTmp = $sMain & ".new"
+	Local $sName = StringTrimLeft(@ScriptName, 1), $sMain = $APP_DIR & "\" & $sName, $sTmp = $APP_DIR & "\" & StringTrimRight($sName, 4) & "_new.exe" ; downloaded as a real .exe, then moved over the main file
 	If Not @Compiled Or StringLeft(@ScriptName, 1) <> "~" Then
 		ShellExecute("https://github.com/" & $GH_REPO & "/releases/latest") ; not started through the copy -> just open the release page
 		Return
 	EndIf
 	If MsgBox(36, $APP_TITLE, _L("Update to v") & $g_sRemoteVer & _L(" now?") & @CRLF & _L("MultiDL restarts afterwards.")) <> 6 Then Return
 	FileDelete($sTmp)
-	If Not _Download("https://github.com/" & $GH_REPO & "/releases/latest/download/" & $sName, $sTmp) Or FileGetSize($sTmp) < 200000 Or FileRead($sTmp, 2) <> "MZ" Then
+	Local $sUpURL = "https://github.com/" & $GH_REPO & "/releases/latest/download/" & $sName, $sWhy = ""
+	If Not _Download($sUpURL, $sTmp) Then ; InetGet failed (redirect to release-assets.githubusercontent.com blocked, no write access ...) -> try the curl.exe that comes with Windows 10/11
 		FileDelete($sTmp)
-		MsgBox(16, $APP_TITLE, _L("Update download failed.") & @CRLF & _L("(Release needs an asset named ") & $sName & ")")
+		RunWait('"' & @SystemDir & '\curl.exe" -L -f -s -o "' & $sTmp & '" "' & $sUpURL & '"', $APP_DIR, @SW_HIDE)
+	EndIf
+	Local $iUpSize = FileGetSize($sTmp), $hUp = FileOpen($sTmp, 16), $sUpHdr = ""
+	If $hUp <> -1 Then
+		$sUpHdr = Hex(FileRead($hUp, 2))
+		FileClose($hUp)
+	EndIf
+	If Not FileExists($sTmp) Then
+		$sWhy = "no file received (blocked? folder not writable: " & $APP_DIR & ")"
+	ElseIf $iUpSize < 200000 Then
+		$sWhy = "file too small (" & $iUpSize & " bytes)"
+	ElseIf $sUpHdr <> "4D5A" Then
+		$sWhy = "not an exe (no MZ header)"
+	EndIf
+	If $sWhy <> "" Then
+		FileDelete($sTmp)
+		MsgBox(16, $APP_TITLE, _L("Update download failed.") & @CRLF & $sWhy & @CRLF & _L("(Release needs an asset named ") & $sName & ")")
 		Return
 	EndIf
 	If Not FileMove($sTmp, $sMain, 1) Then
