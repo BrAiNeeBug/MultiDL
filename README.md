@@ -1,8 +1,8 @@
-# BrAiNee's MultiDL v8.5.0.2 (17.10.2026)
+# BrAiNee's MultiDL v8.5.0.3 (17.10.2026)
 
 A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ffmpeg**, featuring the built-in media player **BrAiNPlay**. Built with AutoIt, with compatibility considerations for running under Wine on Linux.
 
-<img width="1124" height="981" alt="image" src="https://github.com/user-attachments/assets/c45938b6-4d5c-4101-951d-38b4b005422e" />
+<img width="1124" height="1017" alt="image" src="https://github.com/user-attachments/assets/dace51d0-a488-465d-a7e5-9cb017d12287" />
 
 
 ---
