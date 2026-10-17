@@ -269,6 +269,7 @@ Under Wine, some video formats may not play correctly because Windows multimedia
 - Clipboard monitoring and process handling may behave differently depending on the desktop environment.
 - Automatic installation and updating require network access and access to the relevant download sources.
 - Compatibility with every Linux distribution, Wine version, or media format is not guaranteed.
+- BrAiNPlay(light) no logging, no mqtt stuff currently.
 
 For the most predictable behavior, use a supported Windows environment.
 
