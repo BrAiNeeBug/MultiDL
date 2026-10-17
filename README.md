@@ -4,7 +4,6 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 
 <img width="1124" height="1017" alt="image" src="https://github.com/user-attachments/assets/dace51d0-a488-465d-a7e5-9cb017d12287" />
 
-
 ---
 
 ## Features
@@ -14,7 +13,7 @@ A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ff
 - **Video download**: best available video and audio quality, merged into MP4 using ffmpeg.
 - **Audio download**: best available audio extracted as MP3 via ffmpeg.
 - **Live View**: watch a video while it downloads. With the internal player enabled it opens in BrAiNPlay, otherwise in your system player.
-- **Single / Multi mode**: download one file, or all files of a link (playlists).
+- **Single / Multi mode**: download one file, or all files of a link (playlists). In Single mode a pure playlist link (e.g. a YouTube `playlist?list=...` link, which cannot be cleaned) loads only its first item.
 - **Download list**: links are collected in a small list below the input field and downloaded one after another. Every link keeps the format (Video/Audio, Single/Multi) that was selected when it was added.
 - **Auto URL cleanup**: in Single mode, playlist parameters are removed from single-video links (silently, no extra info line). Multi mode keeps the full link.
 - **Status bar info**: shows the selected format and mode (e.g. `Video (MP4): best video quality | Single: download one file`).
@@ -81,6 +80,7 @@ The options menu opens when you click the app name in the title bar (it is highl
 | Tools | **Show download console** | Show / hide the yt-dlp console window. |
 | | **Update all tools** | Update yt-dlp, ffmpeg and Deno. |
 | Program | **Language** | Switch the UI between English and German. |
+| | **About** | Version, short info and links to the GitHub repository and the releases page. |
 
 ---
 
