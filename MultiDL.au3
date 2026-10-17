@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.5.0.2
+#AutoIt3Wrapper_Res_Fileversion=8.5.0.3
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
@@ -50,7 +50,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.5.0.2"
+Global Const $APP_VERSION = "8.5.0.3"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (~MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
@@ -66,7 +66,8 @@ Global $g_bAutoStart = (IniRead($CFG_FILE, "features", "auto_start", "0") = "1")
 Global $g_bDomainLinks = (IniRead($CFG_FILE, "features", "domain_links", "1") = "1")
 Global $g_bUseBP = (IniRead($CFG_FILE, "features", "use_brainplay", "1") = "1") ; False = Play last File opens the system player
 Global $g_sLastClipboard = "", $g_sLastAutoURL = "", $g_tClipPoll = TimerInit()
-Global $g_hOptGUI = 0, $g_hOptClip = 0, $g_hOptDomain = 0, $g_hOptAuto = 0, $g_hOptClose = 0, $g_hOptConsole = 0, $g_hOptUpdate = 0, $g_hOptBP = 0, $g_hOptLang = 0
+Global $g_hOptGUI = 0, $g_hOptClip = 0, $g_hOptDomain = 0, $g_hOptAuto = 0, $g_hOptClose = 0, $g_hOptConsole = 0, $g_hOptUpdate = 0, $g_hOptBP = 0, $g_hOptLang = 0, $g_hOptAbout = 0
+Global $g_hAbout = 0, $g_hAboutClose = 0, $g_hAboutGH = 0, $g_hAboutRel = 0, $g_hAboutTxt = 0, $g_hAboutFoot = 0
 Global $g_sLang = IniRead($CFG_FILE, "features", "language", "en") ; UI language: "en" (default) or "de"
 If $g_sLang <> "de" Then $g_sLang = "en"
 Global $g_bShowReq = False, $g_tFFKey = TimerInit() ; a second start asked this instance to show its window / ffplay key poll timer
@@ -525,7 +526,7 @@ BP_SetControls($GUI_HIDE)
 BP_Apply()
 BP_PLText()
 ; ---- Optionen-Fenster (wird bei Bedarf eingeblendet) ----
-$g_hOptGUI = GUICreate(_L("MultiDL Options"), 280, 426, -1, -1, $WS_CAPTION + $WS_SYSMENU, -1, $hGUI)
+$g_hOptGUI = GUICreate(_L("MultiDL Options"), 280, 456, -1, -1, $WS_CAPTION + $WS_SYSMENU, -1, $hGUI)
 Local $hOptTitle = GUICtrlCreateLabel(_L("Link-Detection"), 16, 14, 248, 22)
 $g_hOptClip = GUICtrlCreateCheckbox(_L("Check for Links in Clipboard."), 18, 44, 250, 22)
 $g_hOptDomain = GUICtrlCreateCheckbox(_L("Resolve Links without http(s)"), 18, 72, 250, 22)
@@ -541,8 +542,28 @@ $g_hOptConsole = GUICtrlCreateButton(_ConsoleBtnText(), 18, 230, 244, 30)
 $g_hOptUpdate = GUICtrlCreateButton(_L("Update all tools"), 18, 266, 244, 30)
 Local $hOptTitle3 = GUICtrlCreateLabel(_L("Program"), 16, 306, 248, 22)
 $g_hOptLang = GUICtrlCreateButton(_LangBtnText(), 18, 332, 244, 30)
-$g_hOptClose = GUICtrlCreateButton(_L("CLOSE"), 92, 380, 95, 28)
+$g_hOptAbout = GUICtrlCreateButton(_L("About"), 18, 368, 244, 30)
+$g_hOptClose = GUICtrlCreateButton(_L("CLOSE"), 92, 416, 95, 28)
 GUICtrlSetState($g_hOptGUI, $GUI_HIDE)
+; ---- About window (opened from the options menu) ----
+$g_hAbout = GUICreate(_L("About MultiDL"), 330, 236, -1, -1, $WS_CAPTION + $WS_SYSMENU, -1, $hGUI)
+Local $hAbTitle = GUICtrlCreateLabel("BrAiNee's MultiDL", 16, 14, 298, 28)
+GUICtrlSetFont($hAbTitle, 15, 700, 0, "Segoe UI")
+Local $hAbVer = GUICtrlCreateLabel("v" & $APP_VERSION, 16, 44, 298, 18)
+GUICtrlSetColor($hAbVer, $CLR_MUTED)
+$g_hAboutTxt = GUICtrlCreateLabel(_L("Downloader for videos and audio (yt-dlp + ffmpeg) with the built-in player BrAiNPlay."), 16, 72, 298, 40)
+$g_hAboutGH = GUICtrlCreateLabel("github.com/" & $GH_REPO, 16, 124, 298, 18)
+GUICtrlSetFont($g_hAboutGH, 9, 400, 4, "Segoe UI")
+GUICtrlSetColor($g_hAboutGH, 0x0066CC)
+GUICtrlSetCursor($g_hAboutGH, 0)
+$g_hAboutRel = GUICtrlCreateLabel(_L("Releases / Updates"), 16, 148, 298, 18)
+GUICtrlSetFont($g_hAboutRel, 9, 400, 4, "Segoe UI")
+GUICtrlSetColor($g_hAboutRel, 0x0066CC)
+GUICtrlSetCursor($g_hAboutRel, 0)
+$g_hAboutFoot = GUICtrlCreateLabel(_L("Built with AutoIt v3 - do whatever you want with it."), 16, 178, 298, 18)
+GUICtrlSetColor($g_hAboutFoot, $CLR_MUTED)
+$g_hAboutClose = GUICtrlCreateButton(_L("CLOSE"), 118, 202, 95, 28)
+GUISwitch($hGUI)
 If Not $g_bUseBP Then GUICtrlSetState($hBtnPlayer, $GUI_HIDE) ; internal player disabled -> no BP button
 ; ---- Fenster anzeigen ----
 GUISetState(@SW_SHOW, $hGUI)
@@ -738,6 +759,8 @@ While 1
 			$g_bUseBP = (BitAND(GUICtrlRead($g_hOptBP), $GUI_CHECKED) = $GUI_CHECKED)
 			IniWrite($CFG_FILE, "features", "use_brainplay", $g_bUseBP ? "1" : "0")
 			GUICtrlSetState($hBtnPlayer, ($g_bUseBP Or $BP_bPlayerMode) ? $GUI_SHOW : $GUI_HIDE)
+		ElseIf $iMsg = $g_hOptAbout Then
+			GUISetState(@SW_SHOW, $g_hAbout)
 		ElseIf $iMsg = $g_hOptLang Then
 			$g_sLang = ($g_sLang = "de") ? "en" : "de"
 			IniWrite($CFG_FILE, "features", "language", $g_sLang)
@@ -761,6 +784,16 @@ While 1
 			IniWrite($CFG_FILE, "features", "clipboard_watch", $g_bClipWatch ? "1" : "0")
 			IniWrite($CFG_FILE, "features", "domain_links", $g_bDomainLinks ? "1" : "0")
 			IniWrite($CFG_FILE, "features", "auto_start", $g_bAutoStart ? "1" : "0")
+		EndIf
+		ContinueLoop
+	EndIf
+	If $aMsg[1] = $g_hAbout Then
+		If $iMsg = $GUI_EVENT_CLOSE Or $iMsg = $g_hAboutClose Then
+			GUISetState(@SW_HIDE, $g_hAbout)
+		ElseIf $iMsg = $g_hAboutGH Then
+			ShellExecute("https://github.com/" & $GH_REPO)
+		ElseIf $iMsg = $g_hAboutRel Then
+			ShellExecute("https://github.com/" & $GH_REPO & "/releases")
 		EndIf
 		ContinueLoop
 	EndIf
@@ -1480,6 +1513,12 @@ Func _ApplyLang()
 	Local $sPL = GUICtrlRead($hProgLabel)
 	If $sPL = "Ready." Or $sPL = "Bereit." Then GUICtrlSetData($hProgLabel, _L("Ready."))
 	WinSetTitle($g_hOptGUI, "", _L("MultiDL Options"))
+	WinSetTitle($g_hAbout, "", _L("About MultiDL"))
+	GUICtrlSetData($g_hOptAbout, _L("About"))
+	GUICtrlSetData($g_hAboutTxt, _L("Downloader for videos and audio (yt-dlp + ffmpeg) with the built-in player BrAiNPlay."))
+	GUICtrlSetData($g_hAboutRel, _L("Releases / Updates"))
+	GUICtrlSetData($g_hAboutFoot, _L("Built with AutoIt v3 - do whatever you want with it."))
+	GUICtrlSetData($g_hAboutClose, _L("CLOSE"))
 	GUICtrlSetData($hOptTitle, _L("Link-Detection"))
 	GUICtrlSetData($g_hOptClip, _L("Check for Links in Clipboard."))
 	GUICtrlSetData($g_hOptDomain, _L("Resolve Links without http(s)"))
@@ -1641,6 +1680,11 @@ Func _LTable()
 	$t &= "running|läuft" & @LF
 	$t &= "done|fertig" & @LF
 	$t &= "failed|fehlgeschlagen" & @LF
+	$t &= "About|Über" & @LF
+	$t &= "About MultiDL|Über MultiDL" & @LF
+	$t &= "Downloader for videos and audio (yt-dlp + ffmpeg) with the built-in player BrAiNPlay.|Downloader für Videos und Audio (yt-dlp + ffmpeg) mit dem eingebauten Player BrAiNPlay." & @LF
+	$t &= "Releases / Updates|Releases / Updates" & @LF
+	$t &= "Built with AutoIt v3 - do whatever you want with it.|Gebaut mit AutoIt v3 - mach damit, was du willst." & @LF
 	$t &= "CLOSE|SCHLIESSEN"
 	Return $t
 EndFunc   ;==>_LTable
@@ -1742,7 +1786,7 @@ Func _StartLive($sURL, $hLiveProgBar, $hLiveProgLabel, $hLiveProgSize, $hLiveBtn
 	GUICtrlSetData($hLiveBtnStart, _L("Stop"))
 	_BtnBk($hLiveBtnStart, 0x444444)
 	; HIER WAR DER FEHLER: ffmpeg-location gefehlt + extractor-args hinzugefuegt gegen 403
-	Local $sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '" --no-playlist --no-part --extractor-args "youtube:player_client=android,web"' & _JsRuntimeArg() & ' -f "best[ext=mp4]/best" --newline -o "' & $DL_DIR & '\_watch_live.mp4" "' & $sURL & '"'
+	Local $sCMD = '"' & $YTDLP_EXE & '" --ffmpeg-location "' & $BIN_DIR & '" --no-playlist --playlist-items 1 --no-part --extractor-args "youtube:player_client=android,web"' & _JsRuntimeArg() & ' -f "best[ext=mp4]/best" --newline -o "' & $DL_DIR & '\_watch_live.mp4" "' & $sURL & '"'
 	$g_sLiveCMD = $sCMD
 	$g_bIPv4Retried = False
 	$g_bBotBlock = False
@@ -1928,7 +1972,7 @@ Func _StartDownload($sURL, $hStatusLabel, $hProgBar, $hProgLabel, $hProgPct)
 		GUICtrlSetColor($hPlayLabel, $CLR_MUTED)
 	EndIf
 	Local $sCMD
-	Local $sPlFlag = " --no-playlist"
+	Local $sPlFlag = " --no-playlist --playlist-items 1" ; Single: a pure playlist link (nothing to clean) loads only its first item
 	If $BP_bPlaylistMode Then $sPlFlag = " --yes-playlist"
 	If $bMP3Mode Then
 		If Not FileExists($FFMPEG_EXE) Then
