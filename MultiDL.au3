@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.5.0.3
+#AutoIt3Wrapper_Res_Fileversion=8.5.0.4
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
@@ -36,7 +36,8 @@
 #include <TabConstants.au3>
 ; ---- Konstanten ----
 Global Const $APP_TITLE = "BrAiNee's MultiDL v8.5"
-Global Const $APP_DIR = (@Compiled And StringLeft(@ScriptName, 1) = "~") ? StringLeft(@ScriptDir, StringInStr(@ScriptDir, "\", 0, -1) - 1) : @ScriptDir ; folder of MultiDL.exe (the ~ copy runs from bin)
+Global Const $IN_BIN = (@Compiled And StringRight(@ScriptDir, 4) = "\bin") ; this exe runs from the bin folder (= the relaunched copy)
+Global Const $APP_DIR = $IN_BIN ? StringLeft(@ScriptDir, StringInStr(@ScriptDir, "\", 0, -1) - 1) : @ScriptDir ; folder of MultiDL.exe (the copy runs from bin)
 Global Const $BIN_DIR = $APP_DIR & "\bin"
 Global Const $DL_DIR = $APP_DIR & "\MultiDL-Downloads"
 Global Const $YTDLP_EXE = $BIN_DIR & "\yt-dlp.exe"
@@ -50,9 +51,9 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.5.0.3"
+Global Const $APP_VERSION = "8.5.0.4"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
-; ---- Start from a copy (~MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
+; ---- Start from a copy (bin\MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
 Global $g_sPlayReq = "" ; file the main loop should open in BrAiNPlay (Play last File / live view)
 Global $g_bPLManual = False ; True after a playlist was loaded by hand -> the player no longer follows the download folder
@@ -77,13 +78,14 @@ Global $g_bQRun = False, $g_iQCur = -1, $g_iQEnd = 3 ; list is being worked off 
 Global $g_hQList = 0, $g_hQAdd = 0, $g_hQInfo = 0, $g_hQDel = 0, $g_hQClr = 0, $g_kQAdd = 0, $g_aAccQ[1][2]
 Global $g_bTrayFlash = False ; tray icon blinks while a download runs
 ; ---- single instance: a second start shows the running window (also from the tray) and quits - before the copy/relaunch dance ----
+_BinGuard()
 _SingleInstance(False)
 _SelfRelaunch()
 _SingleInstance(True) ; the instance that stays takes the mutex
 ; ---- SooS added ffmpeg-unzip debug ----
 Global $g_sUnzipDebug = ""
 ; ---- Modus: False = Video, True = MP3 ----
-Global $bMP3Mode = False
+Global $bMP3Mode = True
 ; ---- Multi-Modus: False = einzelnes Video (Single), True = ganze Playlist (Multi) ----
 Global $BP_bPlaylistMode = False
 Global $g_sRawLink = "", $g_sCleanLink = "" ; full link vs. cleaned link shown in the input (Single mode)
@@ -202,12 +204,12 @@ GUICtrlSetColor($hLabelFormat, $CLR_MUTED)
 GUICtrlSetBkColor($hLabelFormat, $CLR_BG)
 Local $hToggleVideo = GUICtrlCreateLabel("Video(MP4)", 88, 191, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
 GUICtrlSetFont($hToggleVideo, 9, 700, 0, "Segoe UI")
-GUICtrlSetColor($hToggleVideo, $CLR_TEXT)
-GUICtrlSetBkColor($hToggleVideo, $CLR_ACCENT)
+GUICtrlSetColor($hToggleVideo, $CLR_MUTED)
+GUICtrlSetBkColor($hToggleVideo, 0x222222)
 Local $hToggleMP3 = GUICtrlCreateLabel("Audio(MP3)", 176, 191, 84, 26, BitOR($SS_CENTER, $SS_CENTERIMAGE))
 GUICtrlSetFont($hToggleMP3, 9, 700, 0, "Segoe UI")
-GUICtrlSetColor($hToggleMP3, $CLR_MUTED)
-GUICtrlSetBkColor($hToggleMP3, 0x222222)
+GUICtrlSetColor($hToggleMP3, $CLR_TEXT)
+GUICtrlSetBkColor($hToggleMP3, $CLR_ACCENT)
 ; ---- Playlist Toggle ----
 Local $hLabelPlaylist = GUICtrlCreateLabel(_L("Mode:"), 24, 228, 60, 20)
 GUICtrlSetFont($hLabelPlaylist, 9, 600, 0, "Segoe UI")
@@ -572,7 +574,7 @@ If $g_bClipWatch Then $g_sLastClipboard = ClipGet() ; vorhandenen Clipboard-Inha
 _CheckForUpdate($hUpdateBadge)
 _ModeStatus($hStatus)
 Local $tBPUI = TimerInit()
-Local $tHov = TimerInit(), $bTitleHov = False, $iBPCol = $CLR_TEXT
+Local $tHov = TimerInit(), $bTitleHov = False, $iBPCol = $CLR_TEXT, $iMinCol = $CLR_MUTED, $iXCol = $CLR_MUTED
 Local $tAct = TimerInit(), $bAct = False ; make sure the window really has the focus after start (else the first click is lost)
 ; ---- Hauptschleife ----
 Local $bLiveMode = False
@@ -631,10 +633,12 @@ While 1
 	If TimerDiff($tHov) > 60 Then
 		$tHov = TimerInit()
 		Local $aHI = GUIGetCursorInfo($hGUI)
-		Local $bH = False, $bHB = False
+		Local $bH = False, $bHB = False, $bHM = False, $bHX = False
 		If IsArray($aHI) Then
 			If $aHI[0] >= 20 And $aHI[0] <= 160 And $aHI[1] >= 0 And $aHI[1] <= 36 And Not $BP_fTray Then $bH = True
 			If $aHI[0] >= 460 And $aHI[0] <= 485 And $aHI[1] >= 0 And $aHI[1] <= 36 And Not $BP_fTray And ($g_bUseBP Or $BP_bPlayerMode) Then $bHB = True
+			If $aHI[0] >= 500 And $aHI[0] <= 524 And $aHI[1] >= 8 And $aHI[1] <= 30 And Not $BP_fTray Then $bHM = True
+			If $aHI[0] >= 530 And $aHI[0] <= 554 And $aHI[1] >= 8 And $aHI[1] <= 30 And Not $BP_fTray Then $bHX = True
 		EndIf
 		If $bH <> $bTitleHov Then
 			$bTitleHov = $bH
@@ -645,6 +649,16 @@ While 1
 		If $iBPNew <> $iBPCol Then
 			$iBPCol = $iBPNew
 			GUICtrlSetColor($hBtnPlayer, $iBPNew)
+		EndIf
+		; minimize / close: text turns red on mouse over (same as BP and the app name)
+		Local $iMinNew = $bHM ? $CLR_ACCENT : $CLR_MUTED, $iXNew = $bHX ? $CLR_ACCENT : $CLR_MUTED
+		If $iMinNew <> $iMinCol Then
+			$iMinCol = $iMinNew
+			GUICtrlSetColor($hBtnMin, $iMinNew)
+		EndIf
+		If $iXNew <> $iXCol Then
+			$iXCol = $iXNew
+			GUICtrlSetColor($hClose, $iXNew)
 		EndIf
 	EndIf
 	; ---- a file should be played in BrAiNPlay (Play last File and live view share this) ----
@@ -1314,7 +1328,7 @@ Func _QRefresh() ; list control + info text (keeps scroll position and selection
 	Local $aTag[4] = ["[  ] ", "[>>] ", "[OK] ", "[!!] "]
 	GUICtrlSetData($g_hQList, "")
 	For $i = 0 To UBound($g_aQU) - 1
-		GUICtrlSetData($g_hQList, $aTag[$g_aQS[$i]] & StringReplace(StringRegExpReplace($g_aQU[$i], "(?i)^https?://(www\.)?", ""), "|", "/"))
+		GUICtrlSetData($g_hQList, $aTag[$g_aQS[$i]] & (BitAND($g_aQF[$i], 2) ? "<M/" : "<S/") & (BitAND($g_aQF[$i], 1) ? "AUDIO> " : "VIDEO> ") & StringReplace(StringRegExpReplace($g_aQU[$i], "(?i)^https?://(www\.)?", ""), "|", "/"))
 	Next
 	GUICtrlSendMsg($g_hQList, 0x0197, $iTop, 0) ; LB_SETTOPINDEX
 	If $iSel >= 0 Then GUICtrlSendMsg($g_hQList, $LB_SETCURSEL, $iSel, 0)
@@ -1552,6 +1566,8 @@ Func _LTable()
 	$t &= "Options|Optionen" & @LF
 	$t &= "Data URL:|Link (URL):" & @LF
 	$t &= "Mode:|Modus:" & @LF
+	$t &= "Please don't start MultiDL from the bin folder.|Bitte MultiDL nicht aus dem bin-Ordner starten." & @LF
+	$t &= "Start MultiDL.exe from the folder above:|MultiDL.exe aus dem Ordner darüber starten:" & @LF
 	$t &= "Single|Einzeln" & @LF
 	$t &= "Multi|Mehrfach" & @LF
 	$t &= "Stop|Stopp" & @LF
@@ -1598,9 +1614,9 @@ Func _LTable()
 	$t &= "Loading: |Lade: " & @LF
 	$t &= "Merging / Converting...|Zusammenführen / Konvertieren..." & @LF
 	$t &= "ERROR! Download failed. Enable the console in the options (>) for details.|FEHLER! Download fehlgeschlagen. Details: Konsole in den Optionen (>) aktivieren." & @LF
-	$t &= "YouTube blocked you (bot-check)! Restart your router for a new IP.|YouTube hat dich blockiert (Bot-Check)! Router neu starten für eine neue IP." & @LF
+	$t &= "YouTube blocked you (bot-check or age verification)! Restart your router for a new IP.|YouTube hat dich blockiert (Bot-Check oder Altersprüfung)! Router neu starten für eine neue IP." & @LF
 	$t &= "ERROR 416 - too much still open! Reboot PC/router, then retry.|FEHLER 416 - zu viel noch offen! PC/Router neu starten, dann nochmal versuchen." & @LF
-	$t &= "BLOCKED by YouTube (bot-check)! Restart your router (new IP) and try again in a bit.|Von YouTube BLOCKIERT (Bot-Check)! Router neu starten (neue IP) und später nochmal versuchen." & @LF
+	$t &= "BLOCKED by YouTube (bot-check or age verification)! Restart your router (new IP) and try again in a bit.|Von YouTube BLOCKIERT (Bot-Check oder Altersprüfung)! Router neu starten (neue IP) und später nochmal versuchen." & @LF
 	$t &= "ERROR 416! Leftover connections/processes are blocking this. Reboot your PC (or router) and try again.|FEHLER 416! Übrig gebliebene Verbindungen/Prozesse blockieren das. PC (oder Router) neu starten und nochmal versuchen." & @LF
 	$t &= "ERROR! Download failed (try LIVE-Mode!)|FEHLER! Download fehlgeschlagen (probier den LIVE-Modus!)" & @LF
 	$t &= "Live: starting the player - this can take up to a minute under Wine/Linux, please wait...|Live: Player startet - unter Wine/Linux kann das bis zu einer Minute dauern, bitte warten..." & @LF
@@ -1725,12 +1741,12 @@ Func _Is416Line($s)
 			Or StringInStr($s, "HTTP Error 416", 0, 1) > 0)
 EndFunc   ;==>_Is416Line
 Func _DLErrorLabel($sRaw)
-	If _IsBotBlockLine($sRaw) Then Return _L("YouTube blocked you (bot-check)! Restart your router for a new IP.")
+	If _IsBotBlockLine($sRaw) Then Return _L("YouTube blocked you (bot-check or age verification)! Restart your router for a new IP.")
 	If _Is416Line($sRaw) Then Return _L("ERROR 416 - too much still open! Reboot PC/router, then retry.")
 	Return StringLeft(StringRegExpReplace($sRaw, "\s+", " "), 150)
 EndFunc   ;==>_DLErrorLabel
 Func _DLErrorStatus($sRaw)
-	If _IsBotBlockLine($sRaw) Then Return _L("BLOCKED by YouTube (bot-check)! Restart your router (new IP) and try again in a bit.")
+	If _IsBotBlockLine($sRaw) Then Return _L("BLOCKED by YouTube (bot-check or age verification)! Restart your router (new IP) and try again in a bit.")
 	If _Is416Line($sRaw) Then Return _L("ERROR 416! Leftover connections/processes are blocking this. Reboot your PC (or router) and try again.")
 	Return _L("ERROR! Download failed (try LIVE-Mode!)")
 EndFunc   ;==>_DLErrorStatus
@@ -2727,7 +2743,7 @@ EndFunc   ;==>_CheckForUpdate
 ; Vergleicht zwei Versionsstrings à la "7.1.0.2" nummerisch, Teil fuer Teil.
 ; Rueckgabe: 1 wenn $sA neuer, -1 wenn $sA aelter, 0 wenn gleich.
 ; ============================================================
-;  Self update. MultiDL.exe starts a copy of itself (~MultiDL.exe) and exits, so the main file is
+;  Self update. MultiDL.exe starts a copy of itself (bin\MultiDL.exe) and exits, so the main file is
 ;  never locked while MultiDL runs. The update only has to replace MultiDL.exe and start it again.
 ; ============================================================
 Func _ShowMsgId() ; registered window message: "show your window"
@@ -2774,14 +2790,20 @@ Func _OnShowMe($hWnd, $iMsg, $wParam, $lParam)
 	$g_bShowReq = True
 	Return $GUI_RUNDEFMSG
 EndFunc   ;==>_OnShowMe
+Func _BinGuard() ; started by hand from the bin folder (no /bincopy from the relaunch) -> hint and quit
+	If Not $IN_BIN Or StringInStr($CmdLineRaw, "/bincopy") Then Return
+	MsgBox(48, $APP_TITLE, _L("Please don't start MultiDL from the bin folder.") & @CRLF & _L("Start MultiDL.exe from the folder above:") & @CRLF & $APP_DIR)
+	Exit
+EndFunc   ;==>_BinGuard
 Func _SelfRelaunch()
 	If Not @Compiled Then Return
-	If StringLeft(@ScriptName, 1) = "~" Then
-		FileDelete($APP_DIR & "\" & StringTrimRight(StringTrimLeft(@ScriptName, 1), 4) & "_new.exe") ; leftover of an update
+	If $IN_BIN Then
+		FileDelete($APP_DIR & "\" & StringTrimRight(@ScriptName, 4) & "_new.exe") ; leftover of an update
 		Return
 	EndIf
 	DirCreate($BIN_DIR)
-	Local $sCopy = $BIN_DIR & "\~" & @ScriptName, $i, $bOK = False
+	FileDelete($BIN_DIR & "\~" & @ScriptName) ; leftover of the old ~ copy
+	Local $sCopy = $BIN_DIR & "\" & @ScriptName, $i, $bOK = False
 	For $i = 1 To 12 ; the copy can still be locked for a moment by the instance that just started the update
 		If FileCopy(@ScriptFullPath, $sCopy, 1) Then
 			$bOK = True
@@ -2791,12 +2813,12 @@ Func _SelfRelaunch()
 	Next
 	If Not $bOK Then Return ; no write access / copy in use -> simply run from here
 	DllCall("user32.dll", "bool", "AllowSetForegroundWindow", "dword", -1) ; the new process may take the focus (else the first click only activates the window)
-	Run('"' & $sCopy & '" ' & $CmdLineRaw, $APP_DIR)
+	Run('"' & $sCopy & '" /bincopy ' & $CmdLineRaw, $APP_DIR)
 	Exit
 EndFunc   ;==>_SelfRelaunch
 Func _SelfUpdate() ; click on the update badge
-	Local $sName = StringTrimLeft(@ScriptName, 1), $sMain = $APP_DIR & "\" & $sName, $sTmp = $APP_DIR & "\" & StringTrimRight($sName, 4) & "_new.exe" ; downloaded as a real .exe, then moved over the main file
-	If Not @Compiled Or StringLeft(@ScriptName, 1) <> "~" Then
+	Local $sName = @ScriptName, $sMain = $APP_DIR & "\" & $sName, $sTmp = $APP_DIR & "\" & StringTrimRight($sName, 4) & "_new.exe" ; downloaded as a real .exe, then moved over the main file
+	If Not $IN_BIN Then
 		ShellExecute("https://github.com/" & $GH_REPO & "/releases/latest") ; not started through the copy -> just open the release page
 		Return
 	EndIf
