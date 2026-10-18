@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.5.0.8
+#AutoIt3Wrapper_Res_Fileversion=8.5.0.9
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
@@ -51,7 +51,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.5.0.8"
+Global Const $APP_VERSION = "8.5.0.9"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (bin\MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
@@ -1617,6 +1617,7 @@ Func _LTable()
 	$t &= "Mode:|Modus:" & @LF
 	$t &= "Please don't start MultiDL from the bin folder.|Bitte MultiDL nicht aus dem bin-Ordner starten." & @LF
 	$t &= "Start MultiDL.exe from the folder above:|MultiDL.exe aus dem Ordner darüber starten:" & @LF
+	$t &= "Pinned to the taskbar while MultiDL was running? Unpin it and pin MultiDL.exe from the folder above while MultiDL is NOT running.|An die Taskleiste angeheftet, während MultiDL lief? Lösen und stattdessen MultiDL.exe aus dem Ordner darüber anheften, während MultiDL NICHT läuft." & @LF
 	$t &= "Single|Einzeln" & @LF
 	$t &= "Multi|Mehrfach" & @LF
 	$t &= "Stop|Stopp" & @LF
@@ -2842,7 +2843,7 @@ Func _OnShowMe($hWnd, $iMsg, $wParam, $lParam)
 EndFunc   ;==>_OnShowMe
 Func _BinGuard() ; started by hand from the bin folder (no /bincopy from the relaunch) -> hint and quit
 	If Not $IN_BIN Or StringInStr($CmdLineRaw, "/bincopy") Then Return
-	MsgBox(48, $APP_TITLE, _L("Please don't start MultiDL from the bin folder.") & @CRLF & _L("Start MultiDL.exe from the folder above:") & @CRLF & $APP_DIR)
+	MsgBox(48, $APP_TITLE, _L("Please don't start MultiDL from the bin folder.") & @CRLF & _L("Start MultiDL.exe from the folder above:") & @CRLF & $APP_DIR & @CRLF & @CRLF & _L("Pinned to the taskbar while MultiDL was running? Unpin it and pin MultiDL.exe from the folder above while MultiDL is NOT running."))
 	Exit
 EndFunc   ;==>_BinGuard
 Func _SelfRelaunch()
@@ -3117,6 +3118,10 @@ Func BP_FFStart($f, $iSs = 0) ; video through ffplay (own window): used under Wi
 	ElseIf $BP_fFull Then
 		$c &= ' -fs'
 	EndIf
+	If $BP_fVidOn And $BP_iMon > 0 Then ; monitor chosen with D: ffplay opens its window there (fullscreen follows the window)
+		Local $rM = BP_VidMonitor(), $iOff = $BP_fFull ? 0 : 60
+		$c &= ' -left ' & ($rM[0] + $iOff) & ' -top ' & ($rM[1] + $iOff)
+	EndIf
 	$BP_pFF = Run($c & ' "' & $f & '"', $APP_DIR)
 	If $BP_pFF = 0 Then Return False
 	_HideWineConsole() ; the ffplay console window shows up under Windows too
@@ -3124,14 +3129,15 @@ Func BP_FFStart($f, $iSs = 0) ; video through ffplay (own window): used under Wi
 	BP_Log("video via ffplay: " & $f)
 	Return True
 EndFunc   ;==>BP_FFStart
-Func BP_FFKeys() ; F / V typed while the ffplay window has the focus (polled every ~30 ms): same keys as in every other play mode, done by us (restart at the same second)
-	Static $bPF = False, $bPV = False
-	Local $aF = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", 0x46), $aV = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", 0x56)
-	Local $bF = (IsArray($aF) And BitAND($aF[0], 0x8000) <> 0), $bV = (IsArray($aV) And BitAND($aV[0], 0x8000) <> 0)
-	Local $bEdgeF = ($bF And Not $bPF), $bEdgeV = ($bV And Not $bPV)
+Func BP_FFKeys() ; F / V / D typed while the ffplay window has the focus (polled every ~30 ms): same keys as in every other play mode, done by us (restart at the same second)
+	Static $bPF = False, $bPV = False, $bpD = False
+	Local $aF = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", 0x46), $aV = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", 0x56), $aD = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", 0x44)
+	Local $bF = (IsArray($aF) And BitAND($aF[0], 0x8000) <> 0), $bV = (IsArray($aV) And BitAND($aV[0], 0x8000) <> 0), $bD = (IsArray($aD) And BitAND($aD[0], 0x8000) <> 0)
+	Local $bEdgeF = ($bF And Not $bPF), $bEdgeV = ($bV And Not $bPV), $bEdgeD = ($bD And Not $bpD)
 	$bPF = $bF
 	$bPV = $bV
-	If Not ($bEdgeF Or $bEdgeV) Then Return
+	$bpD = $bD
+	If Not ($bEdgeF Or $bEdgeV Or $bEdgeD) Then Return
 	Local $hA = WinGetHandle("[ACTIVE]")
 	If Not $hA Then Return
 	If Not (WinGetProcess($hA) = $BP_pFF Or WinActive("[TITLE:MultiDL BrAiNPlay; CLASS:SDL_app]")) Then Return
@@ -3139,12 +3145,25 @@ Func BP_FFKeys() ; F / V typed while the ffplay window has the focus (polled eve
 		BP_VidKey("f") ; fullscreen <-> window
 	ElseIf $bEdgeV Then
 		BP_ToggleVid() ; picture on / off
+	ElseIf $bEdgeD Then
+		BP_NextMonitor() ; video to the next monitor
 	EndIf
 EndFunc   ;==>BP_FFKeys
+Func BP_FFIsFull() ; the ffplay window really covers its monitor (also when it went fullscreen by double click, which we don't see)
+	Local $h = WinGetHandle("[TITLE:MultiDL BrAiNPlay; CLASS:SDL_app]")
+	If Not $h Then Return $BP_fFull
+	Local $p = WinGetPos($h)
+	If @error Or Not IsArray($p) Then Return $BP_fFull
+	Local $r = BP_MonitorRect($h)
+	Return ($p[2] >= $r[2] And $p[3] >= $r[3])
+EndFunc   ;==>BP_FFIsFull
 Func BP_FFTick() ; ffplay housekeeping (called from BP_Tick)
 	If $BP_pFF And Not $BP_fPause And Not $BP_iDrag And $BP_tFFApply And TimerDiff($BP_tFFApply) > 400 Then
 		$BP_tFFApply = 0
-		If $BP_iVol <> $BP_iFFVol Or $BP_iBal <> $BP_iFFBal Then BP_FFRestart() ; volume / balance changed
+		If $BP_iVol <> $BP_iFFVol Or $BP_iBal <> $BP_iFFBal Then ; volume / balance changed
+			$BP_fFull = BP_FFIsFull()
+			BP_FFRestart()
+		EndIf
 	EndIf
 EndFunc   ;==>BP_FFTick
 Func BP_FFLen($f) ; duration in seconds via ffprobe (0 = unknown)
@@ -4055,6 +4074,12 @@ Func BP_NextMonitor() ; D: send the video to the next monitor (back to "the play
 		If $m[$i][0] = $c[0] And $m[$i][1] = $c[1] Then $idx = $i
 	Next
 	$BP_iMon = Mod($idx + 1, UBound($m)) + 1
+	If $BP_fFF Then ; ffplay: no switch from outside -> restart at the same second on the other monitor (fullscreen stays fullscreen)
+		$BP_fFull = BP_FFIsFull()
+		BP_FFRestart()
+		BP_Note(_L("video on monitor ") & $BP_iMon)
+		Return
+	EndIf
 	If $BP_fWmp Then ; WMP picks the monitor when it enters fullscreen: leave it, move the host window, enter again
 		$BP_fWFS = False
 		$BP_oWMP.fullScreen = False
