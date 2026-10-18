@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.5.0.6
+#AutoIt3Wrapper_Res_Fileversion=8.5.0.7
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
@@ -51,7 +51,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.5.0.6"
+Global Const $APP_VERSION = "8.5.0.7"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (bin\MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
@@ -66,14 +66,14 @@ Global $g_bClipWatch = (IniRead($CFG_FILE, "features", "clipboard_watch", "1") =
 Global $g_bAutoStart = (IniRead($CFG_FILE, "features", "auto_start", "0") = "1")
 Global $g_bDomainLinks = (IniRead($CFG_FILE, "features", "domain_links", "1") = "1")
 Global $g_bUseBP = (IniRead($CFG_FILE, "features", "use_brainplay", "1") = "1") ; False = Play last File opens the system player
-Global $g_sLastClipboard = "", $g_sLastAutoURL = "", $g_tClipPoll = TimerInit()
+Global $g_sLastClipboard = "", $g_iClipSeq = 0, $g_sLastAutoURL = "", $g_tClipPoll = TimerInit()
 Global $g_hOptGUI = 0, $g_hOptClip = 0, $g_hOptDomain = 0, $g_hOptAuto = 0, $g_hOptClose = 0, $g_hOptConsole = 0, $g_hOptUpdate = 0, $g_hOptBP = 0, $g_hOptLang = 0, $g_hOptAbout = 0
 Global $g_hAbout = 0, $g_hAboutClose = 0, $g_hAboutGH = 0, $g_hAboutRel = 0, $g_hAboutTxt = 0, $g_hAboutFoot = 0
 Global $g_sLang = IniRead($CFG_FILE, "features", "language", "en") ; UI language: "en" (default) or "de"
 If $g_sLang <> "de" Then $g_sLang = "en"
 Global $g_bShowReq = False, $g_tFFKey = TimerInit() ; a second start asked this instance to show its window / ffplay key poll timer
 ; ---- download list (queue): link / state (0 waiting, 1 running, 2 done, 3 failed) / format when it was added (bit 1 = audio, bit 2 = multi) ----
-Global $g_aQU[0], $g_aQS[0], $g_aQF[0]
+Global $g_aQU[0], $g_aQS[0], $g_aQF[0], $g_bQReplaced = False ; $g_bQReplaced: last _QAdd only replaced the settings of a waiting link
 Global $g_bQRun = False, $g_iQCur = -1, $g_iQEnd = 3 ; list is being worked off / index of the running link / how the last download ended (2 done, 3 failed)
 Global $g_hQList = 0, $g_hQAdd = 0, $g_hQInfo = 0, $g_hQDel = 0, $g_hQClr = 0, $g_kQAdd = 0, $g_aAccQ[1][2]
 Global $g_bTrayFlash = False ; tray icon blinks while a download runs
@@ -570,7 +570,8 @@ If Not $g_bUseBP Then GUICtrlSetState($hBtnPlayer, $GUI_HIDE) ; internal player 
 ; ---- Fenster anzeigen ----
 GUISetState(@SW_SHOW, $hGUI)
 WinActivate($hGUI)
-If $g_bClipWatch Then $g_sLastClipboard = ClipGet() ; vorhandenen Clipboard-Inhalt nicht ungefragt auto-starten
+If $g_bClipWatch Then $g_sLastClipboard = ClipGet()
+If $g_bClipWatch Then $g_iClipSeq = _ClipSeq() ; vorhandenen Clipboard-Inhalt nicht ungefragt auto-starten
 _CheckForUpdate($hUpdateBadge)
 _ModeStatus($hStatus)
 Local $tBPUI = TimerInit()
@@ -738,9 +739,11 @@ While 1
 	; ---- Zwischenablage überwachen (nicht blockierend) ----
 	If $g_bClipWatch And ($g_bAutoStart Or Not $BP_bPlayerMode) And TimerDiff($g_tClipPoll) >= 450 Then
 		$g_tClipPoll = TimerInit()
+		Local $iClipSeq = _ClipSeq() ; changes on every copy, so the same link copied twice is seen too
 		Local $sClipNow = ClipGet()
-		If Not @error And $sClipNow <> "" And $sClipNow <> $g_sLastClipboard Then
+		If Not @error And $sClipNow <> "" And ($sClipNow <> $g_sLastClipboard Or $iClipSeq <> $g_iClipSeq) Then
 			$g_sLastClipboard = $sClipNow
+			$g_iClipSeq = $iClipSeq
 			Local $sDetected = _DetectURL($sClipNow, $g_bDomainLinks)
 			If $sDetected <> "" Then
 				If $bLiveMode Then ; live is one stream at a time: the link goes into the input field as before
@@ -755,7 +758,12 @@ While 1
 				ElseIf Not $g_bAutoStart Then ; no auto start: the newest link waits in the input field (editable), the one before it moves into the list
 					If _QHas($sDetected) Then
 						_SetStatus($hStatus, "Link is already in the list.", 0xFFAA00)
-					ElseIf $sDetected <> _DetectURL(GUICtrlRead($hInput), $g_bDomainLinks) Then
+					ElseIf _QWaiting($sDetected) Then ; waiting in the list with other settings: gets the current ones right away
+						_QAdd($sDetected)
+						_SetStatus($hStatus, "Link updated in the list (new settings).", 0x4FC3F7)
+					ElseIf $sDetected = _DetectURL(GUICtrlRead($hInput), $g_bDomainLinks) Then ; already waiting in the input field: it takes the settings selected when it moves into the list
+						_SetStatus($hStatus, "Link in the input field. Copy the next one to add it to the list.", 0x4FC3F7)
+					Else
 						Local $sPend = _DetectURL(GUICtrlRead($hInput), $g_bDomainLinks)
 						If $sPend <> "" Then _QAdd($sPend)
 						GUICtrlSetData($hInput, $sDetected)
@@ -765,7 +773,7 @@ While 1
 					EndIf
 				ElseIf _QAdd($sDetected) Then ; every copied link goes into the download list
 					_UpdateStartAppearance($hBtnDownload, True)
-					_SetStatus($hStatus, "Link added to the list.", 0x4FC3F7)
+					_SetStatus($hStatus, $g_bQReplaced ? "Link updated in the list (new settings)." : "Link added to the list.", 0x4FC3F7)
 					If $g_bAutoStart Then $g_bQRun = True
 				Else
 					_SetStatus($hStatus, "Link is already in the list.", 0xFFAA00)
@@ -1256,18 +1264,41 @@ Func _QDelete($iIdx)
 	If $g_iQCur > $iIdx Then $g_iQCur -= 1
 EndFunc   ;==>_QDelete
 ; link -> list (with the format that is selected right now). False if it is already waiting / running.
-Func _QHas($sURL) ; link is already waiting / running in the list
+Func _ClipSeq() ; Windows clipboard sequence number (0 if not available -> only text changes are noticed)
+	Local $a = DllCall("user32.dll", "dword", "GetClipboardSequenceNumber")
+	If @error Or Not IsArray($a) Then Return 0
+	Return $a[0]
+EndFunc   ;==>_ClipSeq
+Func _QWaiting($sURL) ; link is waiting (not started yet) in the list
 	$sURL = StringStripWS($sURL, 3)
 	For $i = 0 To UBound($g_aQU) - 1
-		If $g_aQU[$i] = $sURL And $g_aQS[$i] < 2 Then Return True
+		If $g_aQU[$i] = $sURL And $g_aQS[$i] = 0 Then Return True
+	Next
+	Return False
+EndFunc   ;==>_QWaiting
+Func _QHas($sURL) ; link is already running, or waiting in the list with the settings selected right now
+	$sURL = StringStripWS($sURL, 3)
+	Local $iF = ($bMP3Mode ? 1 : 0) + ($BP_bPlaylistMode ? 2 : 0)
+	For $i = 0 To UBound($g_aQU) - 1
+		If $g_aQU[$i] = $sURL And ($g_aQS[$i] = 1 Or ($g_aQS[$i] = 0 And BitAND($g_aQF[$i], 3) = $iF)) Then Return True
 	Next
 	Return False
 EndFunc   ;==>_QHas
 Func _QAdd($sURL)
 	$sURL = StringStripWS($sURL, 3)
 	If $sURL = "" Then Return False
+	$g_bQReplaced = False
+	Local $iNewF = ($bMP3Mode ? 1 : 0) + ($BP_bPlaylistMode ? 2 : 0)
 	For $i = 0 To UBound($g_aQU) - 1
-		If $g_aQU[$i] = $sURL And $g_aQS[$i] < 2 Then Return False
+		If $g_aQU[$i] = $sURL And $g_aQS[$i] < 2 Then
+			If $g_aQS[$i] = 0 And BitAND($g_aQF[$i], 3) <> $iNewF Then ; same link again with other settings: the waiting entry gets the new ones
+				$g_aQF[$i] = $iNewF + 4 ; bit 4 = replaced (shown as [~~])
+				$g_bQReplaced = True
+				_QRefresh()
+				Return True
+			EndIf
+			Return False
+		EndIf
 	Next
 	If _QCount(0) + _QCount(1) = 0 Then ; nothing open any more: this starts a fresh list, the finished lines of the last one go away
 		For $i = UBound($g_aQS) - 1 To 0 Step -1
@@ -1280,7 +1311,7 @@ Func _QAdd($sURL)
 	ReDim $g_aQF[$n + 1]
 	$g_aQU[$n] = $sURL
 	$g_aQS[$n] = 0
-	$g_aQF[$n] = ($bMP3Mode ? 1 : 0) + ($BP_bPlaylistMode ? 2 : 0)
+	$g_aQF[$n] = $iNewF
 	_QRefresh()
 	Return True
 EndFunc   ;==>_QAdd
@@ -1298,7 +1329,7 @@ Func _QAddInput($hInput, $hStatus)
 		_SetStatus($hStatus, "Link is already in the list.", 0xFFAA00)
 		Return 0
 	EndIf
-	_SetStatus($hStatus, "Link added to the list.", 0x4FC3F7)
+	_SetStatus($hStatus, $g_bQReplaced ? "Link updated in the list (new settings)." : "Link added to the list.", 0x4FC3F7)
 	Return 1
 EndFunc   ;==>_QAddInput
 Func _QStartNext($hStatus, $hProgBar, $hProgLabel, $hProgPct)
@@ -1346,7 +1377,7 @@ Func _QRefresh() ; list control + info text (keeps scroll position and selection
 	Local $aTag[4] = ["[  ] ", "[>>] ", "[OK] ", "[!!] "]
 	GUICtrlSetData($g_hQList, "")
 	For $i = 0 To UBound($g_aQU) - 1
-		GUICtrlSetData($g_hQList, $aTag[$g_aQS[$i]] & (BitAND($g_aQF[$i], 2) ? "<M/" : "<S/") & (BitAND($g_aQF[$i], 1) ? "AUDIO> " : "VIDEO> ") & StringReplace(StringRegExpReplace($g_aQU[$i], "(?i)^https?://(www\.)?", ""), "|", "/"))
+		GUICtrlSetData($g_hQList, ((BitAND($g_aQF[$i], 4) And $g_aQS[$i] = 0) ? "[~~] " : $aTag[$g_aQS[$i]]) & (BitAND($g_aQF[$i], 2) ? "<M/" : "<S/") & (BitAND($g_aQF[$i], 1) ? "AUDIO> " : "VIDEO> ") & StringReplace(StringRegExpReplace($g_aQU[$i], "(?i)^https?://(www\.)?", ""), "|", "/"))
 	Next
 	GUICtrlSendMsg($g_hQList, 0x0197, $iTop, 0) ; LB_SETTOPINDEX
 	If $iSel >= 0 Then GUICtrlSendMsg($g_hQList, $LB_SETCURSEL, $iSel, 0)
@@ -1704,6 +1735,7 @@ Func _LTable()
 	$t &= "Save playlist|Playlist speichern" & @LF
 	$t &= "Load playlist|Playlist laden" & @LF
 	$t &= "Link added to the list.|Link zur Liste hinzugefügt." & @LF
+	$t &= "Link updated in the list (new settings).|Link in der Liste aktualisiert (neue Einstellungen)." & @LF
 	$t &= "Link is already in the list.|Link ist schon in der Liste." & @LF
 	$t &= "Stop the running download first.|Erst den laufenden Download stoppen." & @LF
 	$t &= "Add the link to the download list   (Enter)|Link zur Download-Liste hinzufügen   (Enter)" & @LF
