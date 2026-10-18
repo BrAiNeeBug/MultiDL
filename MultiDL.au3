@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.5.0.5
+#AutoIt3Wrapper_Res_Fileversion=8.5.0.6
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
@@ -51,7 +51,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.5.0.5"
+Global Const $APP_VERSION = "8.5.0.6"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (bin\MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
@@ -752,6 +752,17 @@ While 1
 						$g_sLastAutoURL = $sDetected
 						_StartLive(_CleanURL($sDetected), $hProgBar, $hProgLabel, $hProgPct, $hBtnDownload, $PROG_Y, $PROG_H)
 					EndIf
+				ElseIf Not $g_bAutoStart Then ; no auto start: the newest link waits in the input field (editable), the one before it moves into the list
+					If _QHas($sDetected) Then
+						_SetStatus($hStatus, "Link is already in the list.", 0xFFAA00)
+					ElseIf $sDetected <> _DetectURL(GUICtrlRead($hInput), $g_bDomainLinks) Then
+						Local $sPend = _DetectURL(GUICtrlRead($hInput), $g_bDomainLinks)
+						If $sPend <> "" Then _QAdd($sPend)
+						GUICtrlSetData($hInput, $sDetected)
+						_RefreshInputLink($hInput)
+						_UpdateStartAppearance($hBtnDownload, True)
+						_SetStatus($hStatus, "Link in the input field. Copy the next one to add it to the list.", 0x4FC3F7)
+					EndIf
 				ElseIf _QAdd($sDetected) Then ; every copied link goes into the download list
 					_UpdateStartAppearance($hBtnDownload, True)
 					_SetStatus($hStatus, "Link added to the list.", 0x4FC3F7)
@@ -1245,6 +1256,13 @@ Func _QDelete($iIdx)
 	If $g_iQCur > $iIdx Then $g_iQCur -= 1
 EndFunc   ;==>_QDelete
 ; link -> list (with the format that is selected right now). False if it is already waiting / running.
+Func _QHas($sURL) ; link is already waiting / running in the list
+	$sURL = StringStripWS($sURL, 3)
+	For $i = 0 To UBound($g_aQU) - 1
+		If $g_aQU[$i] = $sURL And $g_aQS[$i] < 2 Then Return True
+	Next
+	Return False
+EndFunc   ;==>_QHas
 Func _QAdd($sURL)
 	$sURL = StringStripWS($sURL, 3)
 	If $sURL = "" Then Return False
