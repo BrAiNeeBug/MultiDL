@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.5.0.9
+#AutoIt3Wrapper_Res_Fileversion=8.5.1.0
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
@@ -51,7 +51,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.5.0.9"
+Global Const $APP_VERSION = "8.5.1.0"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (bin\MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
@@ -2841,8 +2841,13 @@ Func _OnShowMe($hWnd, $iMsg, $wParam, $lParam)
 	$g_bShowReq = True
 	Return $GUI_RUNDEFMSG
 EndFunc   ;==>_OnShowMe
-Func _BinGuard() ; started by hand from the bin folder (no /bincopy from the relaunch) -> hint and quit
+Func _BinGuard() ; started from the bin folder without /bincopy (pin, double click) -> start the real MultiDL.exe instead; hint only if it is missing
 	If Not $IN_BIN Or StringInStr($CmdLineRaw, "/bincopy") Then Return
+	Local $sMain = $APP_DIR & "\" & @ScriptName
+	If FileExists($sMain) Then ; e.g. taskbar pin of the running copy: hand over to the real MultiDL.exe, which relaunches the copy (no window here, so no second taskbar icon)
+		Run('"' & $sMain & '" ' & $CmdLineRaw, $APP_DIR)
+		Exit
+	EndIf
 	MsgBox(48, $APP_TITLE, _L("Please don't start MultiDL from the bin folder.") & @CRLF & _L("Start MultiDL.exe from the folder above:") & @CRLF & $APP_DIR & @CRLF & @CRLF & _L("Pinned to the taskbar while MultiDL was running? Unpin it and pin MultiDL.exe from the folder above while MultiDL is NOT running."))
 	Exit
 EndFunc   ;==>_BinGuard
