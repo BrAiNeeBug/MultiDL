@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.5.1.0
+#AutoIt3Wrapper_Res_Fileversion=8.5.1.1
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
@@ -51,7 +51,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.5.1.0"
+Global Const $APP_VERSION = "8.5.1.1"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (bin\MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
@@ -3123,9 +3123,13 @@ Func BP_FFStart($f, $iSs = 0) ; video through ffplay (own window): used under Wi
 	ElseIf $BP_fFull Then
 		$c &= ' -fs'
 	EndIf
-	If $BP_fVidOn And $BP_iMon > 0 Then ; monitor chosen with D: ffplay opens its window there (fullscreen follows the window)
-		Local $rM = BP_VidMonitor(), $iOff = $BP_fFull ? 0 : 60
-		$c &= ' -left ' & ($rM[0] + $iOff) & ' -top ' & ($rM[1] + $iOff)
+	If $BP_fVidOn Then ; ffplay opens on the video monitor (the one chosen with D, else the player's); fullscreen follows the window
+		Local $rM = BP_VidMonitor()
+		If $BP_fFull Then
+			$c &= ' -left ' & $rM[0] & ' -top ' & $rM[1]
+		Else ; window mode: picture fitted into 80 % of the monitor (a native-size window of a big video would look like fullscreen)
+			$c &= ' -x ' & Int($rM[2] * 0.8) & ' -y ' & Int($rM[3] * 0.8) & ' -left ' & ($rM[0] + Int($rM[2] * 0.1)) & ' -top ' & ($rM[1] + Int($rM[3] * 0.1))
+		EndIf
 	EndIf
 	$BP_pFF = Run($c & ' "' & $f & '"', $APP_DIR)
 	If $BP_pFF = 0 Then Return False
