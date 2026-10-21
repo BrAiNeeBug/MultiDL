@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.5.1.2
+#AutoIt3Wrapper_Res_Fileversion=8.5.1.3
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
@@ -51,7 +51,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.5.1.2"
+Global Const $APP_VERSION = "8.5.1.3"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (bin\MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
@@ -1694,6 +1694,7 @@ Func _LTable()
 	$t &= "Stop the download first!|Stoppe zuerst den Download!" & @LF
 	$t &= "Close the player first (BP button) - the update progress is shown in the download view.|Schließe zuerst den Player (BP-Button) - der Update-Fortschritt wird in der Download-Ansicht angezeigt." & @LF
 	$t &= "Update to v|Update auf v" & @LF
+	$t &= "What's new:|Neu:" & @LF
 	$t &= " now?| jetzt?" & @LF
 	$t &= "MultiDL restarts afterwards.|MultiDL startet danach neu." & @LF
 	$t &= "Update download failed.|Update-Download fehlgeschlagen." & @LF
@@ -2873,13 +2874,40 @@ Func _SelfRelaunch()
 	Run('"' & $sCopy & '" /bincopy ' & $CmdLineRaw, $APP_DIR)
 	Exit
 EndFunc   ;==>_SelfRelaunch
+; Release notes of the releases newer than this version (newest first, max 5), from the GitHub release descriptions; "" if offline / nothing written
+Func _FetchChangelog()
+	Local $sJSON = BinaryToString(InetRead("https://api.github.com/repos/" & $GH_REPO & "/releases?per_page=5", 1), 4)
+	If @error Or $sJSON = "" Then Return ""
+	Local $aRel = StringSplit($sJSON, '"tag_name"', 1), $sOut = "", $aT, $aV, $aB, $sB, $n = 0, $i
+	For $i = 2 To $aRel[0] ; chunk = from one tag_name to the next: that release's own "body" is in there
+		$aT = StringRegExp($aRel[$i], '^\s*:\s*"([^"]+)"', 1)
+		If @error Then ContinueLoop
+		$aV = StringRegExp($aT[0], "[0-9][0-9.]*", 1)
+		If @error Then ContinueLoop
+		If _CompareVersion($aV[0], $APP_VERSION) <= 0 Then ContinueLoop ; only what is new
+		$aB = StringRegExp($aRel[$i], '"body"\s*:\s*"((?:[^"\\]|\\.)*)"', 1)
+		If @error Then ContinueLoop
+		$sB = StringReplace(StringReplace($aB[0], "\r\n", ChrW(1)), "\n", ChrW(1)) ; _JsonUnescape would turn line breaks into spaces
+		$sB = StringReplace(_JsonUnescape($sB), ChrW(1), @CRLF)
+		$sB = StringRegExpReplace($sB, "[*`#]+", "") ; markdown marks out
+		$sB = StringStripWS($sB, 3)
+		If StringLen($sB) > 600 Then $sB = StringLeft($sB, 600) & " ..."
+		If $sB = "" Then ContinueLoop
+		$sOut &= ($sOut <> "" ? @CRLF & @CRLF : "") & $aT[0] & @CRLF & $sB
+		$n += 1
+		If $n >= 3 Then ExitLoop
+	Next
+	If StringLen($sOut) > 1800 Then $sOut = StringLeft($sOut, 1800) & " ..."
+	Return $sOut
+EndFunc   ;==>_FetchChangelog
 Func _SelfUpdate() ; click on the update badge
 	Local $sName = @ScriptName, $sMain = $APP_DIR & "\" & $sName, $sTmp = $APP_DIR & "\" & StringTrimRight($sName, 4) & "_new.exe" ; downloaded as a real .exe, then moved over the main file
 	If Not $IN_BIN Then
 		ShellExecute("https://github.com/" & $GH_REPO & "/releases/latest") ; not started through the copy -> just open the release page
 		Return
 	EndIf
-	If MsgBox(36, $APP_TITLE, _L("Update to v") & $g_sRemoteVer & _L(" now?") & @CRLF & _L("MultiDL restarts afterwards.")) <> 6 Then Return
+	Local $sNotes = _FetchChangelog()
+	If MsgBox(36, $APP_TITLE, _L("Update to v") & $g_sRemoteVer & _L(" now?") & @CRLF & _L("MultiDL restarts afterwards.") & ($sNotes <> "" ? @CRLF & @CRLF & _L("What's new:") & @CRLF & $sNotes : "")) <> 6 Then Return
 	FileDelete($sTmp)
 	Local $sUpURL = "https://github.com/" & $GH_REPO & "/releases/latest/download/" & $sName, $sWhy = ""
 	If Not _Download($sUpURL, $sTmp) Then ; InetGet failed (redirect to release-assets.githubusercontent.com blocked, no write access ...) -> try the curl.exe that comes with Windows 10/11
