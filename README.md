@@ -1,4 +1,4 @@
-# BrAiNee's MultiDL v8.5.1.3 (21.10.2026)
+# BrAiNee's MultiDL v8.6.0.0 (21.10.2026)
 
 A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ffmpeg**, featuring the built-in media player **BrAiNPlay**. Built with AutoIt, with compatibility considerations for running under Wine on Linux.
 
@@ -53,7 +53,7 @@ The list sits directly under the input field.
 
 ### Built-in Player: BrAiNPlay
 
-- **Audio and video playback** for supported media files.
+- **Audio and video playback** for supported media files. Audio (mp3 and other music) is played by the Windows multimedia engine (MCI), **every video is played through ffplay** (`bin\ffplay.exe`), so video behaves the same on Windows and under Wine/Linux.
 - **Integrated player interface**: switch between the downloader and player using the title-bar player button (it is highlighted on mouse-over).
 - **Download folder as playlist**: `MultiDL-Downloads` is synced whenever the player opens and then every few seconds, **also while a download is running**. New files show up as soon as they are finished; half-written files and yt-dlp temp files are skipped. Files already in the playlist are not added twice, and a track you removed stays removed until you reopen the player.
 - **Manual playlists**: after loading an `.m3u` with **LOAD**, the playlist no longer follows the download folder. **CLEAR** switches the automatic sync back on.
@@ -62,8 +62,8 @@ The list sits directly under the input field.
 - **Playlist tools**: add files, add folders, remove tracks, clear the playlist, and save or load `.m3u` playlists.
 - **Automatic playlist saving**: the last playlist is saved automatically.
 - **Shuffle and loop**: playback modes for your music collection.
-- **Video playback**: fullscreen on the active monitor or a window sized to the video. `F` switches between the two in every play mode.
-- **VIDEO ON / OFF**: toggle the video while a video is playing. Works for the built-in video window and for videos played through ffplay (OFF = sound only, ffplay restarts at the same position). Closing the video window with its X button switches the video off and updates the button.
+- **Video playback** (ffplay): fullscreen on the active monitor or a window fitted to the screen. `F` switches between the two. Position and size of the video window are remembered during the session. Audio tracks of a video can be switched with `A`.
+- **VIDEO ON / OFF**: toggle the video while a video is playing. OFF = sound only, ffplay restarts at the same position.
 - **Keyboard shortcuts and media keys**: control playback without relying on the mouse.
 - **Minimize to tray**: playback continues in the background, and the tray tooltip displays the current track.
 
@@ -148,15 +148,15 @@ The following shortcuts are available in player mode.
 | `Ctrl+↑` / `Ctrl+↓` | Volume up / down |
 | `M` | Mute |
 | `Del` | Remove selected track from the playlist |
-| `V` | Video on / off (all play modes) |
-| `F` | Switch between fullscreen and window (all play modes); with the video off it turns the video on in fullscreen |
-| `+` / `-` / `0` | Zoom in / out / reset video zoom |
-| `A` | Switch audio track |
+| `V` | Video on / off |
+| `F` | Switch between fullscreen and window; with the video off it turns the video on in fullscreen |
+| `+` / `-` | Zoom in / out (only for the MCI fallback, see below); with ffplay a hint shows that zoom is not available |
+| `A` | Switch audio track (ffplay videos) |
 | `D` | Move video to the next monitor |
 
-`V` and `F` also work while the ffplay window has the focus (Live and ffplay videos). The other ffplay keys (for example `Space`, `S`, `M`, arrow keys) are then handled by ffplay itself. `Esc` in the ffplay window quits ffplay and stops the track.
+`F`, `V` and `D` also work while the ffplay window has the focus. The other keys (for example `Space`, `S`, `M`, `P`, arrow keys, `0` / `9`) are then handled by ffplay itself and are not synchronized with the player (position display, volume slider). Use them in the MultiDL window instead. `Esc` in the ffplay window quits ffplay and stops the track.
 
-`Esc` never closes MultiDL; only the **X** button does. With the built-in video player (WMP fallback) there is no window mode, so `F` leaves its fullscreen and turns the video off.
+`Esc` never closes MultiDL; only the **X** button does.
 
 The multimedia keys for play/pause, next, previous, and stop work globally while the player is in use, including when the window is minimized to the tray.
 
@@ -255,17 +255,15 @@ yt-dlp, ffmpeg, and the other bundled components are Windows binaries. A separat
 
 ### Video Playback
 
-BrAiNPlay uses Windows multimedia facilities for playback. Depending on the selected player and the current implementation, video playback may use the Windows multimedia engine or an external playback component.
+BrAiNPlay plays audio through the Windows multimedia engine (MCI) and all videos through `ffplay.exe` from the `bin\` folder. If `ffplay.exe` is missing, videos fall back to the MCI video window (not available under Wine, and zoom with `+` / `-` only works there).
 
-When the configured video playback method uses `ffplay.exe`, the executable must be available in the expected location along with its required supporting files.
-
-Under Wine, some video formats may not play correctly because Windows multimedia components, codecs, or external playback methods may behave differently from a native Windows environment.
+Under Wine, audio codecs may behave differently from a native Windows environment.
 
 ### Known Limitations
 
 - Some Windows-specific functionality may behave differently under Wine.
-- Video playback depends on the selected playback method and installed components.
-- Some formats may require compatible codecs or an external player.
+- Video playback needs `ffplay.exe`; without it only the MCI fallback is available.
+- Some audio formats may require compatible codecs.
 - Clipboard monitoring and process handling may behave differently depending on the desktop environment.
 - Automatic installation and updating require network access and access to the relevant download sources.
 - Compatibility with every Linux distribution, Wine version, or media format is not guaranteed.

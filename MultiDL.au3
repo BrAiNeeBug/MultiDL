@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.5.1.3
+#AutoIt3Wrapper_Res_Fileversion=8.6.0.0
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
@@ -35,7 +35,7 @@
 #include <TrayConstants.au3>
 #include <TabConstants.au3>
 ; ---- Konstanten ----
-Global Const $APP_TITLE = "BrAiNee's MultiDL v8.5"
+Global Const $APP_TITLE = "BrAiNee's MultiDL v8.6"
 Global Const $IN_BIN = (@Compiled And StringRight(@ScriptDir, 4) = "\bin") ; this exe runs from the bin folder (= the relaunched copy)
 Global Const $APP_DIR = $IN_BIN ? StringLeft(@ScriptDir, StringInStr(@ScriptDir, "\", 0, -1) - 1) : @ScriptDir ; folder of MultiDL.exe (the copy runs from bin)
 Global Const $BIN_DIR = $APP_DIR & "\bin"
@@ -51,7 +51,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.5.1.3"
+Global Const $APP_VERSION = "8.6.0.0"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (bin\MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
@@ -341,7 +341,7 @@ GUICtrlSetBkColor($hLiveProgBar, 0x0088FF)
 GUICtrlSetState($hLiveProgBar, $GUI_HIDE)
 ; ============================================================
 ; ---- BrAiNPlay test integration --------------------------------
-; Same MultiDL window/style, native MCI first + WMP video fallback.
+; Same MultiDL window/style, native MCI first + ffplay video fallback.
 ; ============================================================
 Global Const $BP_BG = $CLR_BG, $BP_PNL = $CLR_PANEL, $BP_DIM = 0x2A2A2A, $BP_OFF = $CLR_MUTED, $BP_ACC = $CLR_ACCENT, $BP_TXT = $CLR_TEXT, $BP_N = 46, $BP_WY = 116, $BP_WA = 58
 Global Const $BP_VX = 90, $BP_VW = 140, $BP_BX = 325, $BP_BW = 130, $BP_NV = 14, $BP_NB = 13
@@ -353,7 +353,7 @@ Global $BP_aBR = StringSplit("0|32|40|48|56|64|80|96|112|128|160|192|224|256|320
 Global $BP_iVol = _Min(_Max(Int(IniRead($BP_sIni, "player", "vol", 80)), 0), 100), $BP_iBal = _Min(_Max(Int(IniRead($BP_sIni, "player", "bal", 0)), -100), 100)
 Global $BP_iPre = 80, $BP_iDrag = 0, $BP_iErr = 0, $BP_iHov = 0, $BP_aV[$BP_NV], $BP_aB[$BP_NB]
 Global $BP_sExt = "mp3|wav|wma|mp4|m4v|avi|wmv|mpg|mpeg|mov|mkv|webm|vob|m2ts|ts", $BP_sVid = "mp4|m4v|avi|wmv|mpg|mpeg|mov|mkv|webm|vob|m2ts|ts"
-Global $BP_fVid = False, $BP_fVidOn = (IniRead($BP_sIni, "player", "video", "1") = "1"), $BP_fTray = False, $BP_iVSz = 0, $BP_fEmb = False, $BP_iWSt = -1
+Global $BP_fVid = False, $BP_fVidOn = (IniRead($BP_sIni, "player", "video", "1") = "1"), $BP_fTray = False, $BP_iVSz = 0, $BP_fEmb = False
 Global $BP_iWw = Int(IniRead($BP_sIni, "video", "dockw", 640)), $BP_iWh = Int(IniRead($BP_sIni, "video", "dockh", 360))
 If $BP_iWw < 320 Or $BP_iWh < 180 Then
 	$BP_iWw = 640
@@ -361,11 +361,11 @@ If $BP_iWw < 320 Or $BP_iWh < 180 Then
 EndIf
 Global $BP_iFFVol = -1, $BP_iFFBal = 0, $BP_tFFApply = 0 ; ffplay: volume/balance it was started with + time of the last change
 Global $BP_aWSz[2] = [0, 0], $BP_fWSz = False, $BP_aWPos[2] = [0, 0], $BP_fWPos = False, $BP_sMovd = "", $BP_aFFAt[2] = [0, 0], $BP_fFFPlace = False, $BP_tFFPlace = 0 ; video window position (all modes), kept while the program runs only: after a program start the window opens centered on the player's monitor first
-Global $BP_fQuit = False, $BP_hVid = 0, $BP_fFull = (IniRead($BP_sIni, "player", "full", "1") = "1"), $BP_fVidShown = False, $BP_sPos = "", $BP_sWin = "", $BP_iSty = 0, $BP_iMon = 0, $BP_fWFS = False, $BP_fClick = (IniRead($BP_sIni, "video", "clickmode", "1") = "1"), $BP_tChg = 0, $BP_bDown = False, $BP_tPoll = 0
-Global $BP_iZoom = 100, $BP_tNote = 0, $BP_hOsd = 0, $BP_lblOsd = 0, $BP_tOsd = 0, $BP_iOsdMs = 3000, $BP_fWK = False
+Global $BP_fQuit = False, $BP_hVid = 0, $BP_fFull = (IniRead($BP_sIni, "player", "full", "1") = "1"), $BP_fVidShown = False, $BP_sPos = "", $BP_sWin = "", $BP_iSty = 0, $BP_iMon = 0, $BP_fClick = (IniRead($BP_sIni, "video", "clickmode", "1") = "1"), $BP_tChg = 0, $BP_bDown = False, $BP_tPoll = 0
+Global $BP_iZoom = 100, $BP_tNote = 0, $BP_hOsd = 0, $BP_lblOsd = 0, $BP_tOsd = 0, $BP_iOsdMs = 3000
+Global $BP_iAst = 0, $BP_sAudFile = "", $BP_aAud[1] = [0] ; ffplay audio track (A key): number of the chosen audio stream, labels of the current file
 Global $BP_fCurOn = True, $BP_iMx = -1, $BP_iMy = -1, $BP_tMouse = 0, $BP_fAwake = False
 Global $BP_iFill = 0, $BP_iFillLog = 0, $BP_fMK = False, $BP_fQDone = False, $BP_tMK = 0, $BP_tMKp = 0
-Global $BP_oWMP = 0, $BP_idWMP = 0, $BP_fWmp = False, $BP_iWInit = 0
 Global $BP_oComErr = ObjEvent("AutoIt.Error", "BP_Err") ; keep COM handler alive under Wine
 Global $BP_fWine = _IsWine(), $BP_fNoShell = False
 If $BP_fWine Then $BP_fNoShell = True
@@ -431,8 +431,8 @@ Global $BP_kPlay = GUICtrlCreateDummy(), $BP_kStop = GUICtrlCreateDummy(), $BP_k
 Global $BP_kBack = GUICtrlCreateDummy(), $BP_kFwd = GUICtrlCreateDummy(), $BP_kVU = GUICtrlCreateDummy(), $BP_kVD = GUICtrlCreateDummy()
 Global $BP_kMute = GUICtrlCreateDummy(), $BP_kDel = GUICtrlCreateDummy(), $BP_kTV = GUICtrlCreateDummy(), $BP_kFull = GUICtrlCreateDummy()
 Global $BP_kZI = GUICtrlCreateDummy(), $BP_kZO = GUICtrlCreateDummy()
-Global $BP_kZ0 = GUICtrlCreateDummy(), $BP_kAud = GUICtrlCreateDummy(), $BP_kMon = GUICtrlCreateDummy()
-Global $BP_aK[19][2] = [["{SPACE}", $BP_kPlay], ["s", $BP_kStop], ["n", $BP_kNext], ["p", $BP_kPrev], ["{LEFT}", $BP_kBack], ["{RIGHT}", $BP_kFwd], ["^{UP}", $BP_kVU], ["^{DOWN}", $BP_kVD], ["m", $BP_kMute], ["{DEL}", $BP_kDel], ["v", $BP_kTV], ["f", $BP_kFull], ["{+}", $BP_kZI], ["{NUMPADADD}", $BP_kZI], ["-", $BP_kZO], ["{NUMPADSUB}", $BP_kZO], ["0", $BP_kZ0], ["a", $BP_kAud], ["d", $BP_kMon]]
+Global $BP_kAud = GUICtrlCreateDummy(), $BP_kMon = GUICtrlCreateDummy()
+Global $BP_aK[18][2] = [["{SPACE}", $BP_kPlay], ["s", $BP_kStop], ["n", $BP_kNext], ["p", $BP_kPrev], ["{LEFT}", $BP_kBack], ["{RIGHT}", $BP_kFwd], ["^{UP}", $BP_kVU], ["^{DOWN}", $BP_kVD], ["m", $BP_kMute], ["{DEL}", $BP_kDel], ["v", $BP_kTV], ["f", $BP_kFull], ["{+}", $BP_kZI], ["{NUMPADADD}", $BP_kZI], ["-", $BP_kZO], ["{NUMPADSUB}", $BP_kZO], ["a", $BP_kAud], ["d", $BP_kMon]]
 Func BP_KeyDown($vk)
 	Local $r = DllCall("user32.dll", "short", "GetAsyncKeyState", "int", $vk)
 	Return (Not @error) And BitAND($r[0], 0x8000) <> 0
@@ -839,7 +839,7 @@ While 1
 				; AutoIt turns the Esc key into a close event - Esc must never close the app (only the X button does)
 			ElseIf $aMsg[1] = $BP_hVid Then
 				$BP_fVidOn = False
-				BP_VidApply() ; hides the window + updates the VIDEO ON/OFF button (cursor, keep-awake, OSD, WMP fullscreen)
+				BP_VidApply() ; hides the window + updates the VIDEO ON/OFF button (cursor, keep-awake, OSD)
 			ElseIf $aMsg[1] = $hGUI Then
 				ExitLoop
 			EndIf
@@ -953,8 +953,6 @@ While 1
 			If $BP_bPlayerMode Then BP_Zoom(10)
 		Case $iMsg = $BP_kZO
 			If $BP_bPlayerMode Then BP_Zoom(-10)
-		Case $iMsg = $BP_kZ0
-			If $BP_bPlayerMode Then BP_Zoom(0)
 		Case $iMsg = $BP_kAud
 			If $BP_bPlayerMode Then BP_AudioTrack()
 		Case $iMsg = $BP_kMon
@@ -1724,12 +1722,12 @@ Func _LTable()
 	$t &= "LOAD|LADEN" & @LF
 	$t &= "VOL|LAUT" & @LF
 	$t &= "BAL n/a|BAL n.v." & @LF
-	$t &= "video needs Windows Media Player (Legacy) or a codec pack|Video braucht den Windows Media Player (Legacy) oder ein Codec-Pack" & @LF
+	$t &= "video needs ffplay or a codec pack|Video braucht ffplay oder ein Codec-Pack" & @LF
 	$t &= "can't play this file|Datei kann nicht abgespielt werden" & @LF
 	$t &= "only one monitor|nur ein Monitor" & @LF
 	$t &= "video on monitor |Video auf Monitor " & @LF
-	$t &= "zoom is not available for WMP videos|Zoom ist für WMP-Videos nicht verfügbar" & @LF
 	$t &= "zoom |Zoom " & @LF
+	$t &= "zoom is not available in ffplay mode|Zoom ist im ffplay-Modus nicht verfügbar" & @LF
 	$t &= "audio track selection is not available in MCI mode|Audiospur-Auswahl ist im MCI-Modus nicht verfügbar" & @LF
 	$t &= "audio: only one track|Audio: nur eine Spur" & @LF
 	$t &= "audio |Audio " & @LF
@@ -3090,6 +3088,7 @@ EndFunc   ;==>BP_Mci
 Func BP_Play($i)
 	If $i < 0 Or $i >= UBound($BP_aPl) Then Return
 	$BP_fFixed = False
+	$BP_iAst = 0 ; every track starts with its default audio stream
 	Local $ok = BP_Open($BP_aPl[$i])
 	If Not $ok And StringRight($BP_aPl[$i], 4) = ".mp3" Then $ok = BP_Retry($i)
 	$BP_iCur = $i
@@ -3138,11 +3137,41 @@ Func BP_FFKill()
 	EndIf
 	$BP_fFF = False
 EndFunc   ;==>BP_FFKill
-Func BP_FFStart($f, $iSs = 0) ; video through ffplay (own window): used under Wine/Linux, or when MCI and WMP can't play it. $iSs = start second (seek / resume)
+Func BP_AudioList($f) ; audio streams of a file via ffprobe: [0] = count, [1..] = "language title" (count 0 = unknown)
+	Local $r[1] = [0], $sProbe = $BIN_DIR & "\ffprobe.exe"
+	If Not FileExists($sProbe) Then Return $r
+	Local $h = Run('"' & $sProbe & '" -v error -select_streams a -show_entries stream=index:stream_tags=language,title -of default=noprint_wrappers=1 "' & $f & '"', $APP_DIR, @SW_HIDE, 2)
+	If Not $h Then Return $r
+	Local $o = "", $t = TimerInit(), $n = 0, $lg = "", $ti = "", $l
+	While ProcessExists($h) And TimerDiff($t) < 8000
+		$o &= StdoutRead($h)
+		Sleep(20)
+	WEnd
+	$o &= StdoutRead($h)
+	Local $a = StringSplit(StringStripCR($o), @LF, 2)
+	For $l In $a
+		If StringLeft($l, 6) = "index=" Then
+			If $n > 0 Then $r[$n] = StringStripWS($lg & " " & $ti, 3)
+			$n += 1
+			ReDim $r[$n + 1]
+			$lg = ""
+			$ti = ""
+		ElseIf StringLeft($l, 13) = "TAG:language=" Then
+			$lg = StringMid($l, 14)
+		ElseIf StringLeft($l, 10) = "TAG:title=" Then
+			$ti = StringMid($l, 11)
+		EndIf
+	Next
+	If $n > 0 Then $r[$n] = StringStripWS($lg & " " & $ti, 3)
+	$r[0] = $n
+	Return $r
+EndFunc   ;==>BP_AudioList
+Func BP_FFStart($f, $iSs = 0) ; video through ffplay (own window): used under Wine/Linux, or when MCI can't play it. $iSs = start second (seek / resume)
 	BP_FFKill()
 	$BP_fFFPlace = False
 	Local $c = '"' & $FFPLAY_EXE & '" -autoexit -loglevel error -window_title "MultiDL BrAiNPlay" -volume ' & $BP_iVol
 	If $iSs > 0 Then $c &= ' -ss ' & Int($iSs)
+	If $BP_iAst > 0 Then $c &= ' -ast a:' & $BP_iAst ; chosen audio track (A key)
 	If $BP_iBal <> 0 Then ; ffplay has no balance option -> pan filter (mono sources are upmixed to stereo first)
 		Local $gl = $BP_iBal > 0 ? (100 - $BP_iBal) / 100 : 1, $gr = $BP_iBal < 0 ? (100 + $BP_iBal) / 100 : 1
 		$c &= ' -af "aformat=channel_layouts=stereo,pan=stereo|c0=' & StringFormat("%.2f", $gl) & '*c0|c1=' & StringFormat("%.2f", $gr) & '*c1"'
@@ -3160,7 +3189,7 @@ Func BP_FFStart($f, $iSs = 0) ; video through ffplay (own window): used under Wi
 			$c &= ' -left ' & $rM[0] & ' -top ' & $rM[1]
 		Else ; window mode: picture fitted into 80 % of the monitor (a native-size window of a big video would look like fullscreen), on the remembered spot (first time: centered)
 			Local $fw = Int($rM[2] * 0.8), $fh = Int($rM[3] * 0.8), $fo = BP_FrameOff()
-			If $BP_fWSz Then ; remembered size (also taken over from an MCI / WMP window), kept inside the monitor
+			If $BP_fWSz Then ; remembered size (also taken over from an MCI window), kept inside the monitor
 				$fw = _Min($BP_aWSz[0], $rM[2] - 2 * $fo[0])
 				$fh = _Min($BP_aWSz[1], $rM[3] - $fo[0] - $fo[1])
 			ElseIf Not $BP_fWPos Then ; first time: smaller 16:9 window (max 960 wide) that fits beside the player (BP_WinXY puts it there); no room = 80 % centered as before
@@ -3248,17 +3277,12 @@ Func BP_FFLen($f) ; duration in seconds via ffprobe (0 = unknown)
 	$o &= StdoutRead($h)
 	Return Number(StringStripWS($o, 8))
 EndFunc   ;==>BP_FFLen
-Func BP_Open($f) ; open + play, True if no error. MCI first; a video MCI can't play falls back to the Windows Media Player control, then to ffplay
+Func BP_Open($f) ; open + play, True if no error. Audio: MCI. Video: ffplay (MCI video only if ffplay.exe is missing)
 	BP_FFKill() ; a previous ffplay video ends with the track change
-	If $BP_fWmp Then $BP_oWMP.controls.stop()
-	$BP_fWmp = False
-	If $BP_idWMP Then GUICtrlSetState($BP_idWMP, $GUI_HIDE) ; hide the old WMP picture while MCI plays
-	If IsObj($BP_oWMP) Then $BP_oWMP.fullScreen = False ; leave WMP's own fullscreen (it is entered again for the next WMP video if wanted)
-	$BP_fWFS = False ; ... and that is not the user leaving it (would switch the video off)
 	BP_Mci("close bp")
 	$BP_fEmb = False
 	Local $vid = BP_IsVid($f), $c = 'open "' & $f & '" alias bp', $e
-	If $vid And FileExists($FFPLAY_EXE) And ($BP_fWine Or StringRight($f, 15) = "_watch_live.mp4") Then Return BP_FFStart($f) ; (the growing live file always goes through ffplay) ; Wine/Linux: MCI and WMP have no video support -> ffplay
+	If $vid And FileExists($FFPLAY_EXE) Then Return BP_FFStart($f) ; every video goes through ffplay (MCI only plays audio); MCI video stays as the fallback when ffplay.exe is missing
 	If $vid Then
 		BP_Log("video via MCI: " & $f)
 		Sleep(60) ; let MCI finish tearing down the previous video window
@@ -3290,45 +3314,12 @@ Func BP_Open($f) ; open + play, True if no error. MCI first; a video MCI can't p
 		$e = $BP_iErr
 		If $e Then BP_Log("play failed: " & BP_MciErr($e) & " | " & $f)
 	EndIf
-	If $e And $vid Then ; MCI can't do this video -> Windows Media Player as backup
+	If $e And $vid Then ; MCI can't do this video -> ffplay as backup
 		BP_Mci("close bp")
-		If BP_WmpInit() Then Return BP_OpenWmp($f)
-		If FileExists($FFPLAY_EXE) Then Return BP_FFStart($f) ; no WMP either -> ffplay
+		If FileExists($FFPLAY_EXE) Then Return BP_FFStart($f)
 	EndIf
 	Return Not $e
 EndFunc   ;==>BP_Open
-Func BP_WmpInit() ; create the WMP control inside the video window on first use; False if WMP is not available
-	If $BP_fWine Then Return False ; Windows Media Player ActiveX is not usable under Wine
-	If $BP_iWInit Then Return IsObj($BP_oWMP)
-	$BP_iWInit = 1
-	$BP_oWMP = ObjCreate("WMPlayer.OCX")
-	If Not IsObj($BP_oWMP) Then
-		BP_Log("WMP: ObjCreate failed")
-		Return False
-	EndIf
-	GUISwitch($BP_hVid) ; the control must be created while the video window is the current GUI
-	$BP_idWMP = GUICtrlCreateObj($BP_oWMP, 0, 0, $BP_iWw, $BP_iWh) ; dock size; never resized (WMP does its own fullscreen)
-	GUICtrlSetResizing($BP_idWMP, $GUI_DOCKALL)
-	GUISwitch($BP_hMain)
-	$BP_oWMP.uiMode = "none"
-	$BP_oWMP.stretchToFit = True ; scale the video to the window (default: 100% size, cropped)
-	$BP_oWMP.enableContextMenu = False
-	$BP_oWMP.settings.enableErrorDialogs = False
-	BP_Log("WMP control created, ctrl id " & $BP_idWMP)
-	Return True
-EndFunc   ;==>BP_WmpInit
-Func BP_OpenWmp($f) ; video through the Windows Media Player control in the video window (it starts by itself)
-	$BP_fWmp = True
-	$BP_fEmb = True
-	$BP_iWSt = -1
-	$BP_fWFS = False
-	GUICtrlSetState($BP_idWMP, $GUI_SHOW)
-	BP_Log("video via WMP (window wanted=" & $BP_fVidOn & ", ctrl id " & $BP_idWMP & "): " & $f)
-	$BP_oWMP.settings.volume = $BP_iVol
-	$BP_oWMP.settings.balance = $BP_iBal
-	$BP_oWMP.URL = $f
-	Return True
-EndFunc   ;==>BP_OpenWmp
 Func BP_Retry($i) ; some mp3s are refused/skipped by MCI until the junk before the real MPEG stream (ID3v2, scene header ...) is cut -> play a cleaned temp copy
 	BP_Mci("close bp") ; release a previous temp copy
 	Local $g = BP_SoundPlayFixMP3($BP_aPl[$i], $BP_sTmp)
@@ -3345,13 +3336,7 @@ EndFunc   ;==>BP_Retry
 Func BP_PlayPause()
 	If $BP_fPlay Then
 		$BP_fPause = Not $BP_fPause
-		If $BP_fWmp Then
-			If $BP_fPause Then
-				$BP_oWMP.controls.pause()
-			Else
-				$BP_oWMP.controls.play()
-			EndIf
-		ElseIf $BP_pFF Or $BP_fFF Then ; ffplay can't be paused from outside: pause = stop it, resume = start again at the same second
+		If $BP_pFF Or $BP_fFF Then ; ffplay can't be paused from outside: pause = stop it, resume = start again at the same second
 			If $BP_fPause Then
 				BP_FFKill()
 				$BP_fFF = True ; (still an ffplay track, just not running)
@@ -3374,20 +3359,10 @@ Func BP_PlayPause()
 	EndIf
 EndFunc   ;==>BP_PlayPause
 Func BP_Pos() ; own clock (MCI's position/length are unreliable for some mp3s): offset set on play/seek + time since
-	If $BP_fWmp Then Return Number($BP_oWMP.controls.currentPosition) ; WMP knows the real position
 	Return $BP_fPause ? $BP_iOff : $BP_iOff + TimerDiff($BP_tRun) / 1000
 EndFunc   ;==>BP_Pos
 Func BP_Seek($f) ; $f = 0..1
 	If Not $BP_fPlay Or $BP_iLen <= 0 Then Return
-	If $BP_fWmp Then
-		$BP_oWMP.controls.currentPosition = $f * $BP_iLen
-		$BP_oWMP.controls.play()
-		$BP_tCmd = TimerInit()
-		$BP_fPause = False
-		GUICtrlSetData($BP_bPlay, "||")
-		BP_Tick()
-		Return
-	EndIf
 	If $BP_fFF Then ; ffplay: restart at the new second
 		BP_FFStart($BP_aPl[$BP_iCur], $f * $BP_iLen)
 		$BP_tCmd = TimerInit()
@@ -3415,10 +3390,6 @@ Func BP_Skip($d) ; seek relative, seconds
 EndFunc   ;==>BP_Skip
 Func BP_Stop()
 	BP_FFKill()
-	If $BP_fWmp Then $BP_oWMP.controls.stop()
-	$BP_fWmp = False
-	If $BP_idWMP Then GUICtrlSetState($BP_idWMP, $GUI_HIDE)
-	If IsObj($BP_oWMP) Then $BP_oWMP.fullScreen = False
 	BP_Mci("close bp")
 	$BP_fPlay = False
 	$BP_fPause = False
@@ -3456,14 +3427,7 @@ Func BP_Tick()
 	If $BP_fFF Then BP_FFTick()
 	If Not $BP_fPlay Or $BP_fPause Then Return
 	Local $m, $ended
-	If $BP_fWmp Then ; playState: 3 playing, 2 paused, 6/7/9 loading, 8 ended, 1 stopped, 10 ready
-		$m = Number($BP_oWMP.playState)
-		If $m <> $BP_iWSt Then
-			$BP_iWSt = $m
-			BP_Log("wmp state " & $m & " | pos " & Round(Number($BP_oWMP.controls.currentPosition), 1) & " " & BP_WmpErr())
-		EndIf
-		$ended = ($m = 8 Or $m = 1 Or $m = 10 Or $m = 0)
-	ElseIf $BP_fFF Then
+	If $BP_fFF Then
 		$ended = Not ProcessExists($BP_pFF)
 	Else
 		$m = BP_Mci("status bp mode")
@@ -3475,7 +3439,7 @@ Func BP_Tick()
 	EndIf
 	If $ended And TimerDiff($BP_tCmd) > (BP_IsVid($BP_aPl[$BP_iCur]) ? 3000 : 600) Then ; track finished (or failed to open)
 		Local $bad = TimerDiff($BP_tStart) < 5000 And $BP_iOff = 0
-		If $bad Then BP_Log("stopped early (" & ($BP_fWmp ? "wmp state=" & $m & " " & BP_WmpErr() : "mode=" & $m) & "): " & $BP_aPl[$BP_iCur])
+		If $bad Then BP_Log("stopped early (mode=" & $m & "): " & $BP_aPl[$BP_iCur])
 		If Not $BP_fFixed And $BP_iOff = 0 And TimerDiff($BP_tStart) < 3000 And StringRight($BP_aPl[$BP_iCur], 4) = ".mp3" Then ; died right at the start: try without ID3v2 tag
 			If BP_Retry($BP_iCur) Then Return
 		EndIf
@@ -3483,20 +3447,14 @@ Func BP_Tick()
 			BP_Next(1)
 		Else
 			BP_Stop()
-			If $bad Then GUICtrlSetData($BP_lblNow, (BP_IsVid($BP_aPl[$BP_iCur]) And Not IsObj($BP_oWMP)) ? _L("video needs Windows Media Player (Legacy) or a codec pack") : _L("can't play this file"))
+			If $bad Then GUICtrlSetData($BP_lblNow, BP_IsVid($BP_aPl[$BP_iCur]) ? _L("video needs ffplay or a codec pack") : _L("can't play this file"))
 		EndIf
 		Return
 	EndIf
-	If $BP_fVid And Not $BP_fFF And $BP_iVSz = 0 And TimerDiff($BP_tStart) > 800 And (Not $BP_fWmp Or $m = 3) Then ; video size is known by now (WMP: playing) -> fit it / WMP: go fullscreen
+	If $BP_fVid And Not $BP_fFF And $BP_iVSz = 0 And TimerDiff($BP_tStart) > 800 Then ; video size is known by now -> fit it
 		$BP_iVSz = 1
 		BP_VideoSize()
-		If $BP_fFull And Not $BP_fWmp Then BP_Osd($BP_sNow, 4000) ; track title over the fullscreen video (WMP: when it enters fullscreen)
-		If $BP_fWmp Then BP_Log("wmp audio languages: " & Number($BP_oWMP.controls.audioLanguageCount))
-	EndIf
-	If $BP_fWmp And Not $BP_fFull And $BP_fVidOn And $BP_iVSz >= 1 And TimerDiff($BP_tStart) < 8000 Then BP_WmpFit() ; WMP reports the picture size late (first it may still show the previous video's) -> follow it for the first seconds
-	If $BP_fWmp And $BP_iLen <= 0 Then ; length unknown from Explorer -> ask WMP
-		Local $oM = $BP_oWMP.currentMedia
-		If IsObj($oM) Then $BP_iLen = Number($oM.duration)
+		If $BP_fFull Then BP_Osd($BP_sNow, 4000) ; track title over the fullscreen video
 	EndIf
 	Local $s = BP_Pos()
 	If $BP_iLen > 0 Then $s = _Min($s, $BP_iLen)
@@ -3547,9 +3505,6 @@ Func BP_Apply()
 	If $BP_fPlay Then
 		If $BP_fFF Then
 			$BP_tFFApply = TimerInit() ; ffplay can't change volume/balance while running -> BP_Tick restarts it at the same second (debounced)
-		ElseIf $BP_fWmp Then
-			$BP_oWMP.settings.volume = $BP_iVol
-			$BP_oWMP.settings.balance = $BP_iBal
 		ElseIf $BP_iBal = 0 Then
 			BP_Mci("setaudio bp volume to " & Int($v))
 		Else
@@ -3939,18 +3894,11 @@ Func BP_VidApply() ; TV button + video window follow: current track is a video? 
 		BP_VidStyle()
 		BP_Dock()
 		GUISetState(@SW_SHOWNOACTIVATE, $BP_hVid)
-		WinSetOnTop($BP_hVid, "", ($BP_fFull And Not $BP_fWmp) ? 1 : 0)
-		If $BP_fWmp And Not $BP_fFull Then ; WMP window mode: WMP leaves its fullscreen (in BP_VideoSize) - not the user leaving it
-			$BP_fWFS = False
-			BP_WmpKeys(False)
-		EndIf
+		WinSetOnTop($BP_hVid, "", $BP_fFull ? 1 : 0)
 		$BP_fVidShown = True
 		BP_VideoSize()
-		If $BP_fFull And Not $BP_fWmp Then WinActivate($BP_hMain) ; the keyboard stays with the player (shortcuts keep working in fullscreen)
+		If $BP_fFull Then WinActivate($BP_hMain) ; the keyboard stays with the player (shortcuts keep working in fullscreen)
 	Else
-		If IsObj($BP_oWMP) Then $BP_oWMP.fullScreen = False ; leave WMP's own fullscreen
-		BP_WmpKeys(False)
-		$BP_fWFS = False ; WMP is out of fullscreen -> the next fullscreen entry must register the hotkeys again (else the keys stay dead and only Esc works)
 		GUISetState(@SW_HIDE, $BP_hOsd)
 		$BP_tOsd = 0
 		GUISetState(@SW_HIDE, $BP_hVid)
@@ -4019,7 +3967,7 @@ Func BP_WinState($h) ; "x,y,clientW,clientH" of a window ("" = unknown): what BP
 	If Not IsArray($p) Or Not IsArray($z) Then Return ""
 	Return $p[0] & "," & $p[1] & "," & $z[0] & "," & $z[1]
 EndFunc   ;==>BP_WinState
-Func BP_WinPlace($w, $h) ; MCI / WMP window mode: video window (outer size) onto its spot
+Func BP_WinPlace($w, $h) ; MCI window mode: video window (outer size) onto its spot
 	Local $xy = BP_WinXY($w, $h)
 	WinMove($BP_hVid, "", $xy[0], $xy[1], $w, $h)
 	$BP_sMovd = BP_WinState($BP_hVid)
@@ -4045,35 +3993,24 @@ Func BP_FFRemember() ; ffplay in window mode (not while its placement is pending
 	If BitAND(WinGetState($h), 18) <> 2 Or BP_FFIsFull() Then Return
 	BP_WinRemember($h)
 EndFunc   ;==>BP_FFRemember
-Func BP_Dock() ; MCI fullscreen: the video monitor | MCI window: placed by _VideoSize | WMP: invisible host window on the video monitor (its fullscreen follows it)
+Func BP_Dock() ; MCI fullscreen: the video monitor | MCI window: placed by _VideoSize
 	Local $r = BP_VidMonitor()
-	If $BP_fWmp Then
-		If $BP_fFull Then
-			WinMove($BP_hVid, "", $r[0] + 20, $r[1] + 20, $BP_iWw, $BP_iWh)
-		ElseIf $BP_sWin = "" Then ; window mode, size not known yet: already on its spot (BP_WmpFit sizes it later)
-			Local $fo = BP_FrameOff()
-			BP_WinPlace($BP_iWw + 2 * $fo[0], $BP_iWh + $fo[0] + $fo[1])
-		EndIf
-		Return
-	EndIf
 	Local $p = WinGetPos($BP_hMain)
 	If $BP_fFull And IsArray($p) Then
 		WinMove($BP_hVid, "", $r[0], $r[1], $r[2], $r[3])
 		$BP_sPos = $p[0] & "," & $p[1]
 	EndIf
 EndFunc   ;==>BP_Dock
-Func BP_VidStyle() ; 0 = fullscreen (borderless) | 1 = window (title bar) | 2 = WMP host (invisible, click-through, sits on the video monitor)
-	Local $m = $BP_fFull ? ($BP_fWmp ? 2 : 0) : 1
+Func BP_VidStyle() ; 0 = fullscreen (borderless) | 1 = window (title bar)
+	Local $m = $BP_fFull ? 0 : 1
 	If $m = $BP_iSty Then Return
 	$BP_iSty = $m
 	If $m = 1 Then
 		GUISetStyle(BitOR($WS_CAPTION, $WS_POPUP, $WS_SYSMENU, $WS_CLIPCHILDREN), $WS_EX_NOACTIVATE, $BP_hVid)
-	ElseIf $m = 2 Then
-		GUISetStyle(BitOR($WS_POPUP, $WS_CLIPCHILDREN), BitOR($WS_EX_NOACTIVATE, $WS_EX_TRANSPARENT, $WS_EX_LAYERED), $BP_hVid)
 	Else
 		GUISetStyle(BitOR($WS_POPUP, $WS_CLIPCHILDREN), $WS_EX_NOACTIVATE, $BP_hVid)
 	EndIf
-	WinSetTrans($BP_hVid, "", $m = 2 ? 0 : 255)
+	WinSetTrans($BP_hVid, "", 255)
 	DllCall("user32.dll", "bool", "SetWindowPos", "hwnd", $BP_hVid, "hwnd", 0, "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x37) ; frame changed
 EndFunc   ;==>BP_VidStyle
 Func BP_ToggleVid() ; TV button / V key
@@ -4116,43 +4053,13 @@ Func BP_VidKey($k) ; f = fullscreen <-> window (video off -> on, fullscreen) - s
 	BP_VidApply()
 EndFunc   ;==>BP_VidKey
 Func BP_VidPoll() ; called every ~30 ms while the video window is visible
-	Local $q, $r, $dn = False, $mp, $now
+	Local $q, $r, $dn = False, $mp
 	If Not $BP_fFull And $BP_sWin <> "" And BitAND(WinGetState($BP_hVid), 18) = 2 Then BP_WinRemember($BP_hVid) ; window mode: remember where the user put the window
 	If $BP_tOsd And TimerDiff($BP_tOsd) > $BP_iOsdMs Then ; OSD timeout
 		$BP_tOsd = 0
 		GUISetState(@SW_HIDE, $BP_hOsd)
 	EndIf
 	BP_KeepAwake(Not $BP_fPause) ; no screensaver / display sleep while a video is shown (not while paused)
-	If $BP_fWmp Then
-		If Not $BP_fFull And Not $BP_fTray And WinActive($BP_hVid) Then WinActivate($BP_hMain) ; window mode: a click in the picture gives the focus to WMP -> hand the keyboard back to the player (its keys only work there)
-		If $BP_iVSz >= 1 Then
-			$now = ($BP_oWMP.fullScreen <> 0)
-			If $now Then
-				If Not $BP_fWFS Then ; WMP just went fullscreen: it owns the keyboard now -> our keys as global hotkeys, title on screen
-					$BP_fWFS = True
-					BP_WmpKeys(True)
-					BP_Osd($BP_sNow, 4000)
-					If Not $BP_fFull Then ; the user entered WMP's fullscreen itself (double click in the picture)
-						$BP_fFull = True
-						$BP_sWin = ""
-					EndIf
-				EndIf
-			ElseIf $BP_fWFS And TimerDiff($BP_tStart) > 1500 Then ; WMP left its fullscreen
-				$BP_fWFS = False
-				$mp = $BP_oWMP.playState
-				If $mp = 3 Or $mp = 2 Then ; still playing / paused = the user left it (Esc / double-click) -> window mode
-					BP_Log("WMP fullscreen left by the user -> window")
-					$BP_fFull = False
-					$BP_sWin = ""
-					$BP_tChg = TimerInit()
-					BP_VidApply()
-				Else ; the video ended and WMP leaves fullscreen by itself -> keep "video wanted", the next video opens the window again
-					BP_Log("WMP fullscreen left (video ended, state " & $mp & ")")
-				EndIf
-			EndIf
-		EndIf
-		Return
-	EndIf
 	If $BP_fFull Then
 		$q = WinGetPos($BP_hMain)
 		If IsArray($q) Then
@@ -4241,19 +4148,14 @@ Func BP_NextMonitor() ; D: send the video to the next monitor (back to "the play
 		BP_Note(_L("video on monitor ") & $BP_iMon)
 		Return
 	EndIf
-	If $BP_fWmp Then ; WMP picks the monitor when it enters fullscreen: leave it, move the host window, enter again
-		$BP_fWFS = False
-		$BP_oWMP.fullScreen = False
-		Sleep(350)
-	EndIf
 	$BP_sWin = ""
 	BP_VidApply()
 	BP_Note(_L("video on monitor ") & $BP_iMon)
 EndFunc   ;==>BP_NextMonitor
-Func BP_Zoom($d) ; + / - / 0: zoom the video (odd resolutions, baked-in black bars); MCI videos only
+Func BP_Zoom($d) ; + / -: zoom the video (odd resolutions, baked-in black bars); MCI videos only
 	If Not ($BP_fPlay And $BP_fVid) Then Return
-	If $BP_fWmp Then
-		BP_Note("zoom is not available for WMP videos")
+	If $BP_fFF Then ; ffplay has no zoom -> just tell the user
+		BP_Note("zoom is not available in ffplay mode")
 		Return
 	EndIf
 	If $d = 0 Then
@@ -4264,24 +4166,24 @@ Func BP_Zoom($d) ; + / - / 0: zoom the video (odd resolutions, baked-in black ba
 	BP_VideoSize()
 	BP_Note(_L("zoom ") & $BP_iZoom & "%")
 EndFunc   ;==>BP_Zoom
-Func BP_AudioTrack() ; A: next audio track (WMP: its audio languages; the MCI driver has no track selection)
+Func BP_AudioTrack() ; A: next audio track (ffplay videos: restarted at the same second with -ast; the MCI driver has no track selection)
 	If Not ($BP_fPlay And $BP_fVid) Then Return
-	If Not $BP_fWmp Then
-		BP_Note("audio track selection is not available in MCI mode")
+	If Not $BP_fFF Then
+		BP_Note("audio track selection works with ffplay videos only")
 		Return
 	EndIf
-	Local $c = $BP_oWMP.controls, $cnt, $i, $nm = ""
-	If Not IsObj($c) Then Return
-	$cnt = Number($c.audioLanguageCount)
-	If $cnt < 2 Then
+	If $BP_sAudFile <> $BP_aPl[$BP_iCur] Then ; first press for this file: ask ffprobe what it has
+		$BP_aAud = BP_AudioList($BP_aPl[$BP_iCur])
+		$BP_sAudFile = $BP_aPl[$BP_iCur]
+	EndIf
+	Local $n = $BP_aAud[0]
+	If $n < 2 Then
 		BP_Note("audio: only one track")
 		Return
 	EndIf
-	$i = Number($c.currentAudioLanguageIndex) + 1
-	If $i >= $cnt Then $i = 0
-	$c.currentAudioLanguageIndex = $i
-	$nm = $c.getLanguageName($c.getAudioLanguageID($i))
-	BP_Note(_L("audio ") & ($i + 1) & "/" & $cnt & ($nm <> "" ? ": " & $nm : ""))
+	$BP_iAst = Mod($BP_iAst + 1, $n)
+	BP_FFRestart() ; (while paused the next start uses it)
+	BP_Note("audio " & ($BP_iAst + 1) & "/" & $n & ($BP_aAud[$BP_iAst + 1] <> "" ? ": " & $BP_aAud[$BP_iAst + 1] : ""))
 EndFunc   ;==>BP_AudioTrack
 Func BP_Note($t) ; short message in the player header and (while a video is shown) on the video
 	$t = _L($t)
@@ -4292,7 +4194,7 @@ EndFunc   ;==>BP_Note
 Func BP_Osd($t, $ms = 3000) ; text strip above the video: top left of the player's monitor (window mode: of the video window)
 	If Not $BP_fVidShown Or $BP_fTray Then Return
 	Local $r = BP_VidMonitor(), $x = $r[0] + 24, $y = $r[1] + 24, $wd = _Max(400, Int($r[2] * 0.5)), $p
-	If Not $BP_fFull And Not $BP_fWmp Then
+	If Not $BP_fFull Then
 		$p = WinGetPos($BP_hVid)
 		If IsArray($p) Then
 			$x = $p[0] + 16
@@ -4309,19 +4211,6 @@ Func BP_Osd($t, $ms = 3000) ; text strip above the video: top left of the player
 	$BP_iOsdMs = $ms
 	GUISwitch($BP_hMain)
 EndFunc   ;==>BP_Osd
-Func BP_WmpKeys($on) ; while WMP is fullscreen it owns the keyboard: register our keys as global hotkeys (only then)
-	If $on = $BP_fWK Then Return
-	$BP_fWK = $on
-	Local $k = StringSplit("{SPACE}|{LEFT}|{RIGHT}|{UP}|{DOWN}|^{UP}|^{DOWN}|n|p|s|m|f|v|a|d", "|", 2)
-	Local $f = StringSplit("BP_PlayPause|BP_HkBack|BP_HkFwd|BP_HkVU|BP_HkVD|BP_HkVU|BP_HkVD|BP_HkNext|BP_Prev|BP_Stop|BP_Mute|BP_HkF|BP_HkV|BP_AudioTrack|BP_NextMonitor", "|", 2)
-	For $i = 0 To UBound($k) - 1
-		If $on Then
-			HotKeySet($k[$i], $f[$i])
-		Else
-			HotKeySet($k[$i])
-		EndIf
-	Next
-EndFunc   ;==>BP_WmpKeys
 Func BP_HkBack()
 	BP_Skip(-5)
 EndFunc   ;==>BP_HkBack
@@ -4382,59 +4271,8 @@ Func BP_MonitorRect($hWnd) ; [x, y, w, h] of the monitor the window is on
 	$a[3] = DllStructGetData($t, 5) - $a[1]
 	Return $a
 EndFunc   ;==>BP_MonitorRect
-Func BP_WmpFit() ; WMP window mode: client area = video size (scaled down if it does not fit the monitor), the WMP control fills it
-	Local $z = WinGetClientSize($BP_hVid)
-	If Not IsArray($z) Then Return
-	If $z[0] < 2 Or $z[1] < 2 Then Return
-	Local $oM = $BP_oWMP.currentMedia, $sw = 0, $sh = 0
-	If IsObj($oM) Then
-		$sw = Number($oM.imageSourceWidth)
-		$sh = Number($oM.imageSourceHeight)
-	EndIf
-	Local $mr = BP_VidMonitor(), $cw = ($sw > 0) ? $sw : 640, $ch = ($sh > 0) ? $sh : 360
-	Local $k = _Min(1, _Min($mr[2] * 0.9 / $cw, $mr[3] * 0.9 / $ch))
-	$cw = Int($cw * $k)
-	$ch = Int($ch * $k)
-	BP_WinFit($cw, $ch)
-	Local $bNewSz = ($BP_sWin <> $cw & "x" & $ch)
-	If $bNewSz Then ; new video / mode: resize + center once (afterwards the user may move the window)
-		$BP_sWin = $cw & "x" & $ch
-		Local $ps = WinGetPos($BP_hVid)
-		If IsArray($ps) Then
-			Local $ex = $ps[2] - $z[0], $ey = $ps[3] - $z[1] ; title bar + borders
-			BP_WinPlace($cw + $ex, $ch + $ey) ; remembered spot, first time centered
-		EndIf
-	EndIf
-	$z = WinGetClientSize($BP_hVid) ; the control fills what the window really has now (not what we calculated)
-	If IsArray($z) Then
-		If $z[0] > 1 And $z[1] > 1 Then
-			$cw = $z[0]
-			$ch = $z[1]
-		EndIf
-	EndIf
-	GUICtrlSetPos($BP_idWMP, 0, 0, $cw, $ch)
-	If $bNewSz Then ; WMP keeps the picture layout of the first video of the session -> force it to lay the picture out again for this window
-		GUICtrlSetPos($BP_idWMP, 0, 0, $cw - 1, $ch - 1)
-		GUICtrlSetPos($BP_idWMP, 0, 0, $cw, $ch)
-		$BP_oWMP.stretchToFit = False
-		$BP_oWMP.stretchToFit = True
-		$BP_oWMP.uiMode = "none"
-	EndIf
-EndFunc   ;==>BP_WmpFit
-Func BP_VideoSize() ; MCI: fullscreen = picture letterboxed into the monitor | window = client area gets the video's size. WMP: fullscreen is its own
+Func BP_VideoSize() ; MCI: fullscreen = picture letterboxed into the monitor | window = client area gets the video's size
 	If Not ($BP_fPlay And $BP_fVid) Then Return
-	If $BP_fWmp Then
-		$BP_oWMP.stretchToFit = True
-		If $BP_fVidOn And $BP_iVSz >= 1 Then
-			If $BP_fFull Then
-				If Not $BP_oWMP.fullScreen Then $BP_oWMP.fullScreen = True
-			Else ; window mode: out of WMP's fullscreen, window = video size
-				If $BP_oWMP.fullScreen Then $BP_oWMP.fullScreen = False
-				BP_WmpFit()
-			EndIf
-		EndIf
-		Return
-	EndIf
 	Local $z = WinGetClientSize($BP_hVid)
 	If Not IsArray($z) Then Return
 	If $z[0] < 2 Or $z[1] < 2 Then Return
@@ -4915,31 +4753,17 @@ Func BP_Log($s) ; %APPDATA%\BrAiNPlay\brainplay.log
 ;~ 	FileWriteLine($BP_sApp & "\brainplay.log", @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & "  " & $s)
 	Return
 EndFunc   ;==>BP_Log
-Func BP_WmpErr() ; last WMP error text (if any)
-	Local $e = $BP_oWMP.Error
-	If Not IsObj($e) Then Return ""
-	If $e.errorCount < 1 Then Return ""
-	Local $it = $e.Item(0)
-	If Not IsObj($it) Then Return ""
-	Return $it.errorDescription
-EndFunc   ;==>BP_WmpErr
 Func BP_MciErr($n) ; MCI error code -> text
 	Local $t = DllStructCreate("wchar[256]")
 	DllCall("winmm.dll", "int", "mciGetErrorStringW", "dword", $n, "ptr", DllStructGetPtr($t), "uint", 255)
 	Return $n & " " & DllStructGetData($t, 1)
 EndFunc   ;==>BP_MciErr
 Func BP_Quit()
-	If $BP_fQDone Then Return ; runs twice (explicit call + exit handler); the second time the video window and WMP are already gone
+	If $BP_fQDone Then Return ; runs twice (explicit call + exit handler); the second time the video window is already gone
 	$BP_fQDone = True
-	BP_WmpKeys(False)
 	BP_MediaKeys(False)
 	BP_Cursor(True)
 	BP_KeepAwake(False)
-	If IsObj($BP_oWMP) Then
-		$BP_oWMP.fullScreen = False
-		$BP_oWMP.controls.stop()
-		$BP_oWMP = 0 ; release the control before the windows are deleted
-	EndIf
 	BP_FFKill()
 	BP_Mci("close bp")
 	IniWrite($BP_sIni, "player", "video", $BP_fVidOn ? "1" : "0")
