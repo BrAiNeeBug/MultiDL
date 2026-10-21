@@ -2,7 +2,7 @@
 
 A dark-themed Windows GUI for downloading videos and audio via **yt-dlp** + **ffmpeg**, featuring the built-in media player **BrAiNPlay**. Built with AutoIt, with compatibility considerations for running under Wine on Linux.
 
-<img width="1124" height="1017" alt="image" src="https://github.com/user-attachments/assets/dace51d0-a488-465d-a7e5-9cb017d12287" />
+<img width="1124" height="1017" alt="image" src="https://github.com/user-attachments/assets/57a978b6-8b33-404f-956a-7205a783df2f" />
 
 ---
 
