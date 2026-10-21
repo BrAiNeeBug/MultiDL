@@ -2,7 +2,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=multidl.ico
 #AutoIt3Wrapper_Outfile_x64=MultiDL.exe
-#AutoIt3Wrapper_Res_Fileversion=8.5.1.1
+#AutoIt3Wrapper_Res_Fileversion=8.5.1.2
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_requestedExecutionLevel=None
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
@@ -51,7 +51,7 @@ Global Const $CLR_TEXT = 0xF0F0F0
 Global Const $CLR_MUTED = 0x888888
 Global Const $CLR_INPUT = 0x252525
 ; ---- Aktuelle Version (muss zum AutoIt3Wrapper_Res_Fileversion oben passen) ----
-Global Const $APP_VERSION = "8.5.1.1"
+Global Const $APP_VERSION = "8.5.1.2"
 Global Const $GH_REPO = "BrAiNeeBug/MultiDL"
 ; ---- Start from a copy (bin\MultiDL.exe), so MultiDL.exe itself is never locked and can be replaced by an update ----
 Global $g_sRemoteVer = "" ; newer version found on GitHub (set by _CheckForUpdate)
@@ -360,6 +360,7 @@ If $BP_iWw < 320 Or $BP_iWh < 180 Then
 	$BP_iWh = 360
 EndIf
 Global $BP_iFFVol = -1, $BP_iFFBal = 0, $BP_tFFApply = 0 ; ffplay: volume/balance it was started with + time of the last change
+Global $BP_aWSz[2] = [0, 0], $BP_fWSz = False, $BP_aWPos[2] = [0, 0], $BP_fWPos = False, $BP_sMovd = "", $BP_aFFAt[2] = [0, 0], $BP_fFFPlace = False, $BP_tFFPlace = 0 ; video window position (all modes), kept while the program runs only: after a program start the window opens centered on the player's monitor first
 Global $BP_fQuit = False, $BP_hVid = 0, $BP_fFull = (IniRead($BP_sIni, "player", "full", "1") = "1"), $BP_fVidShown = False, $BP_sPos = "", $BP_sWin = "", $BP_iSty = 0, $BP_iMon = 0, $BP_fWFS = False, $BP_fClick = (IniRead($BP_sIni, "video", "clickmode", "1") = "1"), $BP_tChg = 0, $BP_bDown = False, $BP_tPoll = 0
 Global $BP_iZoom = 100, $BP_tNote = 0, $BP_hOsd = 0, $BP_lblOsd = 0, $BP_tOsd = 0, $BP_iOsdMs = 3000, $BP_fWK = False
 Global $BP_fCurOn = True, $BP_iMx = -1, $BP_iMy = -1, $BP_tMouse = 0, $BP_fAwake = False
@@ -3103,6 +3104,7 @@ Func BP_Play($i)
 EndFunc   ;==>BP_Play
 Func BP_FFKill()
 	If $BP_pFF Then
+		BP_FFRemember() ; the window is still there: keep its spot
 		If ProcessExists($BP_pFF) Then ProcessClose($BP_pFF)
 		$BP_pFF = 0
 	EndIf
@@ -3110,6 +3112,7 @@ Func BP_FFKill()
 EndFunc   ;==>BP_FFKill
 Func BP_FFStart($f, $iSs = 0) ; video through ffplay (own window): used under Wine/Linux, or when MCI and WMP can't play it. $iSs = start second (seek / resume)
 	BP_FFKill()
+	$BP_fFFPlace = False
 	Local $c = '"' & $FFPLAY_EXE & '" -autoexit -loglevel error -window_title "MultiDL BrAiNPlay" -volume ' & $BP_iVol
 	If $iSs > 0 Then $c &= ' -ss ' & Int($iSs)
 	If $BP_iBal <> 0 Then ; ffplay has no balance option -> pan filter (mono sources are upmixed to stereo first)
@@ -3127,8 +3130,25 @@ Func BP_FFStart($f, $iSs = 0) ; video through ffplay (own window): used under Wi
 		Local $rM = BP_VidMonitor()
 		If $BP_fFull Then
 			$c &= ' -left ' & $rM[0] & ' -top ' & $rM[1]
-		Else ; window mode: picture fitted into 80 % of the monitor (a native-size window of a big video would look like fullscreen)
-			$c &= ' -x ' & Int($rM[2] * 0.8) & ' -y ' & Int($rM[3] * 0.8) & ' -left ' & ($rM[0] + Int($rM[2] * 0.1)) & ' -top ' & ($rM[1] + Int($rM[3] * 0.1))
+		Else ; window mode: picture fitted into 80 % of the monitor (a native-size window of a big video would look like fullscreen), on the remembered spot (first time: centered)
+			Local $fw = Int($rM[2] * 0.8), $fh = Int($rM[3] * 0.8), $fo = BP_FrameOff()
+			If $BP_fWSz Then ; remembered size (also taken over from an MCI / WMP window), kept inside the monitor
+				$fw = _Min($BP_aWSz[0], $rM[2] - 2 * $fo[0])
+				$fh = _Min($BP_aWSz[1], $rM[3] - $fo[0] - $fo[1])
+			ElseIf Not $BP_fWPos Then ; first time: smaller 16:9 window (max 960 wide) that fits beside the player (BP_WinXY puts it there); no room = 80 % centered as before
+				Local $pp = WinGetPos($BP_hMain), $pm = BP_MonitorRect($BP_hMain)
+				If IsArray($pp) And $pm[0] = $rM[0] And $pm[1] = $rM[1] Then
+					Local $room = _Max($rM[0] + $rM[2] - ($pp[0] + $pp[2]), $pp[0] - $rM[0]) - 12 - 2 * $fo[0]
+					If $room >= 480 Then
+						$fw = _Min(_Min($fw, $room), 960)
+						$fh = _Min($fh, Int($fw * 9 / 16))
+					EndIf
+				EndIf
+			EndIf
+			$BP_aFFAt = BP_WinXY($fw + 2 * $fo[0], $fh + $fo[0] + $fo[1])
+			$c &= ' -x ' & $fw & ' -y ' & $fh & ' -left ' & ($BP_aFFAt[0] + $fo[0]) & ' -top ' & ($BP_aFFAt[1] + $fo[1])
+			$BP_fFFPlace = True ; BP_FFTick puts the window exactly on that spot once it is up (-left / -top only come close)
+			$BP_tFFPlace = TimerInit()
 		EndIf
 	EndIf
 	$BP_pFF = Run($c & ' "' & $f & '"', $APP_DIR)
@@ -3167,6 +3187,18 @@ Func BP_FFIsFull() ; the ffplay window really covers its monitor (also when it w
 	Return ($p[2] >= $r[2] And $p[3] >= $r[3])
 EndFunc   ;==>BP_FFIsFull
 Func BP_FFTick() ; ffplay housekeeping (called from BP_Tick)
+	If $BP_fFFPlace Then ; new window: move it exactly onto its spot (also the baseline for "the user moved it")
+		Local $hP = WinGetHandle("[TITLE:MultiDL BrAiNPlay; CLASS:SDL_app]")
+		If $hP Then
+			$BP_fFFPlace = False
+			WinMove($hP, "", $BP_aFFAt[0], $BP_aFFAt[1])
+			$BP_sMovd = BP_WinState($hP)
+		ElseIf TimerDiff($BP_tFFPlace) > 5000 Then
+			$BP_fFFPlace = False
+		EndIf
+	ElseIf $BP_pFF Then
+		BP_FFRemember()
+	EndIf
 	If $BP_pFF And Not $BP_fPause And Not $BP_iDrag And $BP_tFFApply And TimerDiff($BP_tFFApply) > 400 Then
 		$BP_tFFApply = 0
 		If $BP_iVol <> $BP_iFFVol Or $BP_iBal <> $BP_iFFBal Then ; volume / balance changed
@@ -3900,10 +3932,100 @@ Func BP_VidApply() ; TV button + video window follow: current track is a video? 
 	EndIf
 	GUISwitch($BP_hMain)
 EndFunc   ;==>BP_VidApply
+Func BP_FrameOff() ; [dx, dy]: outer window corner -> client area corner of a window with title bar + sizing frame
+	Local $r[2] = [8, 31], $t = DllStructCreate("long;long;long;long"), $a = DllCall("user32.dll", "bool", "AdjustWindowRect", "struct*", $t, "dword", 0x00CF0000, "bool", False)
+	If Not @error And IsArray($a) Then
+		If $a[0] Then
+			$r[0] = -DllStructGetData($t, 1)
+			$r[1] = -DllStructGetData($t, 2)
+		EndIf
+	EndIf
+	Return $r
+EndFunc   ;==>BP_FrameOff
+Func BP_WinFit(ByRef $cw, ByRef $ch) ; client size of the video window (aspect kept): the remembered width, first time as big as fits beside the player (max 960)
+	If $cw <= 0 Or $ch <= 0 Then Return
+	If $BP_fWSz Then ; remembered size (taken over from the last window): same width for every video, but never bigger than the monitor allows
+		Local $mz = BP_VidMonitor(), $kz = _Min($BP_aWSz[0] / $cw, _Min($mz[2] * 0.9 / $cw, $mz[3] * 0.9 / $ch))
+		$cw = Int($cw * $kz)
+		$ch = Int($ch * $kz)
+		Return
+	EndIf
+	Local $mr = BP_VidMonitor(), $pm = BP_MonitorRect($BP_hMain), $pp = WinGetPos($BP_hMain), $fo = BP_FrameOff()
+	If Not IsArray($pp) Then Return
+	If $pm[0] <> $mr[0] Or $pm[1] <> $mr[1] Then Return
+	Local $room = _Max($mr[0] + $mr[2] - ($pp[0] + $pp[2]), $pp[0] - $mr[0]) - 12 - 2 * $fo[0]
+	If $room < 480 Then Return
+	Local $k = _Min(1, _Min($room, 960) / $cw)
+	$cw = Int($cw * $k)
+	$ch = Int($ch * $k)
+EndFunc   ;==>BP_WinFit
+Func BP_WinXY($w, $h) ; [x, y] of a video window with this outer size: the remembered spot (kept on its monitor), first time centered on the video monitor
+	Local $r[2], $m, $mr = BP_VidMonitor()
+	$r[0] = $mr[0] + Int(($mr[2] - $w) / 2)
+	$r[1] = $mr[1] + Int(($mr[3] - $h) / 2)
+	If Not $BP_fWPos Then ; first time: beside the player, on the side that has room (right first, then left), top edges aligned; no room / other monitor: centered
+		Local $pp = WinGetPos($BP_hMain), $pm = BP_MonitorRect($BP_hMain), $gap = 12
+		If IsArray($pp) And $pm[0] = $mr[0] And $pm[1] = $mr[1] Then
+			If $pp[0] + $pp[2] + $gap + $w <= $mr[0] + $mr[2] Then
+				$r[0] = $pp[0] + $pp[2] + $gap
+				$r[1] = _Max(_Min($pp[1], $mr[1] + $mr[3] - $h), $mr[1])
+			ElseIf $pp[0] - $gap - $w >= $mr[0] Then
+				$r[0] = $pp[0] - $gap - $w
+				$r[1] = _Max(_Min($pp[1], $mr[1] + $mr[3] - $h), $mr[1])
+			EndIf
+		EndIf
+		Return $r
+	EndIf
+	$m = BP_Monitors()
+	For $i = 0 To UBound($m) - 1 ; the monitor it sat on (if that one is gone meanwhile: centered again)
+		If $BP_aWPos[0] + 40 >= $m[$i][0] And $BP_aWPos[0] + 40 < $m[$i][0] + $m[$i][2] And $BP_aWPos[1] + 40 >= $m[$i][1] And $BP_aWPos[1] + 40 < $m[$i][1] + $m[$i][3] Then
+			$r[0] = _Max(_Min($BP_aWPos[0], $m[$i][0] + $m[$i][2] - $w), $m[$i][0])
+			$r[1] = _Max(_Min($BP_aWPos[1], $m[$i][1] + $m[$i][3] - $h), $m[$i][1])
+			ExitLoop
+		EndIf
+	Next
+	Return $r
+EndFunc   ;==>BP_WinXY
+Func BP_WinState($h) ; "x,y,clientW,clientH" of a window ("" = unknown): what BP_WinRemember compares
+	Local $p = WinGetPos($h), $z = WinGetClientSize($h)
+	If Not IsArray($p) Or Not IsArray($z) Then Return ""
+	Return $p[0] & "," & $p[1] & "," & $z[0] & "," & $z[1]
+EndFunc   ;==>BP_WinState
+Func BP_WinPlace($w, $h) ; MCI / WMP window mode: video window (outer size) onto its spot
+	Local $xy = BP_WinXY($w, $h)
+	WinMove($BP_hVid, "", $xy[0], $xy[1], $w, $h)
+	$BP_sMovd = BP_WinState($BP_hVid)
+EndFunc   ;==>BP_WinPlace
+Func BP_WinRemember($h) ; position or size differ from what we set = the user moved / resized the window -> spot and size count from now on (all play modes share them)
+	Local $s = BP_WinState($h)
+	If $s = "" Or $s = $BP_sMovd Then Return
+	Local $a = StringSplit($s, ",", 2)
+	If UBound($a) < 4 Then Return
+	If Number($a[0]) < -30000 Or Number($a[2]) < 100 Then Return
+	$BP_sMovd = $s
+	$BP_aWPos[0] = Number($a[0])
+	$BP_aWPos[1] = Number($a[1])
+	$BP_fWPos = True
+	$BP_aWSz[0] = Number($a[2])
+	$BP_aWSz[1] = Number($a[3])
+	$BP_fWSz = True
+EndFunc   ;==>BP_WinRemember
+Func BP_FFRemember() ; ffplay in window mode (not while its placement is pending / fullscreen)
+	If $BP_fFFPlace Then Return
+	Local $h = WinGetHandle("[TITLE:MultiDL BrAiNPlay; CLASS:SDL_app]")
+	If Not $h Then Return
+	If BitAND(WinGetState($h), 18) <> 2 Or BP_FFIsFull() Then Return
+	BP_WinRemember($h)
+EndFunc   ;==>BP_FFRemember
 Func BP_Dock() ; MCI fullscreen: the video monitor | MCI window: placed by _VideoSize | WMP: invisible host window on the video monitor (its fullscreen follows it)
 	Local $r = BP_VidMonitor()
 	If $BP_fWmp Then
-		If $BP_fFull Then WinMove($BP_hVid, "", $r[0] + 20, $r[1] + 20, $BP_iWw, $BP_iWh)
+		If $BP_fFull Then
+			WinMove($BP_hVid, "", $r[0] + 20, $r[1] + 20, $BP_iWw, $BP_iWh)
+		ElseIf $BP_sWin = "" Then ; window mode, size not known yet: already on its spot (BP_WmpFit sizes it later)
+			Local $fo = BP_FrameOff()
+			BP_WinPlace($BP_iWw + 2 * $fo[0], $BP_iWh + $fo[0] + $fo[1])
+		EndIf
 		Return
 	EndIf
 	Local $p = WinGetPos($BP_hMain)
@@ -3967,6 +4089,7 @@ Func BP_VidKey($k) ; f = fullscreen <-> window (video off -> on, fullscreen) - s
 EndFunc   ;==>BP_VidKey
 Func BP_VidPoll() ; called every ~30 ms while the video window is visible
 	Local $q, $r, $dn = False, $mp, $now
+	If Not $BP_fFull And $BP_sWin <> "" And BitAND(WinGetState($BP_hVid), 18) = 2 Then BP_WinRemember($BP_hVid) ; window mode: remember where the user put the window
 	If $BP_tOsd And TimerDiff($BP_tOsd) > $BP_iOsdMs Then ; OSD timeout
 		$BP_tOsd = 0
 		GUISetState(@SW_HIDE, $BP_hOsd)
@@ -4083,6 +4206,7 @@ Func BP_NextMonitor() ; D: send the video to the next monitor (back to "the play
 		If $m[$i][0] = $c[0] And $m[$i][1] = $c[1] Then $idx = $i
 	Next
 	$BP_iMon = Mod($idx + 1, UBound($m)) + 1
+	$BP_fWPos = False ; the remembered spot belongs to the old monitor -> centered on the new one
 	If $BP_fFF Then ; ffplay: no switch from outside -> restart at the same second on the other monitor (fullscreen stays fullscreen)
 		$BP_fFull = BP_FFIsFull()
 		BP_FFRestart()
@@ -4243,13 +4367,14 @@ Func BP_WmpFit() ; WMP window mode: client area = video size (scaled down if it 
 	Local $k = _Min(1, _Min($mr[2] * 0.9 / $cw, $mr[3] * 0.9 / $ch))
 	$cw = Int($cw * $k)
 	$ch = Int($ch * $k)
+	BP_WinFit($cw, $ch)
 	Local $bNewSz = ($BP_sWin <> $cw & "x" & $ch)
 	If $bNewSz Then ; new video / mode: resize + center once (afterwards the user may move the window)
 		$BP_sWin = $cw & "x" & $ch
 		Local $ps = WinGetPos($BP_hVid)
 		If IsArray($ps) Then
 			Local $ex = $ps[2] - $z[0], $ey = $ps[3] - $z[1] ; title bar + borders
-			WinMove($BP_hVid, "", $mr[0] + Int(($mr[2] - $cw - $ex) / 2), $mr[1] + Int(($mr[3] - $ch - $ey) / 2), $cw + $ex, $ch + $ey)
+			BP_WinPlace($cw + $ex, $ch + $ey) ; remembered spot, first time centered
 		EndIf
 	EndIf
 	$z = WinGetClientSize($BP_hVid) ; the control fills what the window really has now (not what we calculated)
@@ -4295,12 +4420,13 @@ Func BP_VideoSize() ; MCI: fullscreen = picture letterboxed into the monitor | w
 		$k = _Min(1, _Min($mr[2] * 0.9 / $cw, $mr[3] * 0.9 / $ch))
 		$cw = Int($cw * $k)
 		$ch = Int($ch * $k)
+		BP_WinFit($cw, $ch)
 		If $BP_sWin <> $cw & "x" & $ch Then ; new video / mode: resize + center once (afterwards the user may move the window)
 			$BP_sWin = $cw & "x" & $ch
 			Local $ps = WinGetPos($BP_hVid)
 			If IsArray($ps) Then
 				Local $ex = $ps[2] - $z[0], $ey = $ps[3] - $z[1] ; title bar + borders
-				WinMove($BP_hVid, "", $mr[0] + Int(($mr[2] - $cw - $ex) / 2), $mr[1] + Int(($mr[3] - $ch - $ey) / 2), $cw + $ex, $ch + $ey)
+				BP_WinPlace($cw + $ex, $ch + $ey) ; remembered spot, first time centered
 			EndIf
 		EndIf
 		$w = Int($cw * $BP_iZoom / 100) ; zoom: bigger than the window = cropped (the window clips), smaller = black border
